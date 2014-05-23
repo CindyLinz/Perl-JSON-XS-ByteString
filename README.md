@@ -50,12 +50,12 @@ to Perl data.
 
 # DESIGN CONSIDERATION
 
-## I didn't transfer the numeric value from `json_decode` back to string values
+### I didn't transfer the numeric value from `json_decode` back to string values
 
 Because in the pure Perl world, there's insignificant difference between numeric or string.
 So I think we don't need to do it since the result will be used in Perl.
 
-## The hash key is not transferred
+### The hash key is not transferred
 
 It's an implementation consideration. There's no way to transfer the hash key inplace.
 Forcing to do it is to delete the hash entry and then re-insert it into the hash with the transferred key,
@@ -65,7 +65,7 @@ If you really need it, please let me know. I might create another independent fu
 
 # FUNCTIONS
 
-## $json\_string = encode\_json($perl\_data)
+### $json\_string = encode\_json($perl\_data)
 
 Get a JSON string from a perl data structure.
 
@@ -81,7 +81,7 @@ After that, the function will then transfer
 Note that the hash key will be left unchanged before or after,
 because there's no way to transfer hash key inplace.
 
-## $json\_string = encode\_json\_unsafe($perl\_value)
+### $json\_string = encode\_json\_unsafe($perl\_value)
 
 Same as `encode_json` except the last step after `JSON::XS::encode_json`.
 The argument will be upgraded to multibyte chars and never back.
@@ -89,7 +89,7 @@ The argument will be upgraded to multibyte chars and never back.
 This function is a little faster than the `encode_json`.
 Use it if you're sure that you'll not use the argument after the JSON call.
 
-## $perl\_data = decode\_json($json\_string)
+### $perl\_data = decode\_json($json\_string)
 
 Get the perl data structure back from a JSON string.
 
@@ -101,7 +101,7 @@ because there's no way to transfer hash key inplace.
 
 And only the string values are converted, the numeric ones are not.
 
-## $perl\_data = decode\_json\_safe($json\_string)
+### $perl\_data = decode\_json\_safe($json\_string)
 
 The same as `decode_json` but wrap it around an `eval` block and suppress
 the `$SIG{__DIE__}` signal.
@@ -109,17 +109,17 @@ We'll get an `undef` value back when decode fail.
 
 This function is only for convenience.
 
-## encode\_utf8($perl\_data)
+### encode\_utf8($perl\_data)
 
 Downgrade each string fields of the `$perl_data` to utf8 encoded octets.
 
-## decode\_utf8($perl\_data)
+### decode\_utf8($perl\_data)
 
 Upgrade each string or numeric fields of the `$perl_data` to multibyte chars.
 
 # CAVEATS
 
-## The input argument of `encode_json` / `encnode_json_unsafe` will be changed
+### The input argument of `encode_json` / `encnode_json_unsafe` will be changed
 
 The `encode_json_unsafe` will upgrade all the string or numeric scalar into multibyte char strings
 and never back.
@@ -128,7 +128,7 @@ Though the `encode_json` will try to convert it back to utf8 encoded octets.
 It didn't remember if any of them is originally numeric or multibyte chars already.
 They'll all transfer back to utf8 encoded octets.
 
-## The hash key is not touched
+### The hash key is not touched
 
 To do it will hurt the performance. If you really need it, let me know.
 
