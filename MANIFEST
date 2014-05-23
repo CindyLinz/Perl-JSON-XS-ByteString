@@ -1,0 +1,8 @@
+Changes
+Makefile.PL
+MANIFEST
+ppport.h
+README
+ByteString.xs
+t/JSON-XS-ByteString.t
+lib/JSON/XS/ByteString.pm
