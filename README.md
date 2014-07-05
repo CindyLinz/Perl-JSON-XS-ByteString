@@ -29,7 +29,7 @@ The added overhead is very low, you can try that your self ^^
 
 The module try to achieve that by 3 approaches below:
 
-- Transfer all the numeric values into strings before building the JSON string from Perl data
+- Transfer all the non-ref, non-undef values into strings before building the JSON string from Perl data
 
   Because by the Perl nature, it's hard to determine if the outputted one is a string or numeric one.
   The nondeterministic will make the life harder if the acceptor is writing in other languages
