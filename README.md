@@ -55,14 +55,6 @@ to Perl data.
 Because in the pure Perl world, there's insignificant difference between numeric or string.
 So I think we don't need to do it since the result will be used in Perl.
 
-### The hash key is not transferred
-
-It's an implementation consideration. There's no way to transfer the hash key inplace.
-Forcing to do it is to delete the hash entry and then re-insert it into the hash with the transferred key,
-which is much more expensive.
-
-If you really need it, please let me know. I might create another independent function to do it.
-
 # FUNCTIONS
 
 ### $json\_string = encode\_json($perl\_data)
@@ -77,9 +69,6 @@ Before calling to JSON::XS::encode\_json. This function will transfer (modify th
 After that, the function will then transfer
 
 - each multibyte-char string back to bytes (utf8-octet)
-
-Note that the hash key will be left unchanged before or after,
-because there's no way to transfer hash key inplace.
 
 ### $json\_string = encode\_json\_unsafe($perl\_value)
 
@@ -96,10 +85,7 @@ Get the perl data structure back from a JSON string.
 After the call to JSON::XS::decode\_json, the function
 will transfer each multibyte-char string field into bytes (utf8-octet)
 
-Note that the hash key will be left unchanged,
-because there's no way to transfer hash key inplace.
-
-And only the string values are converted, the numeric ones are not.
+Note that only the string values are converted, the numeric ones are not.
 
 ### $perl\_data = decode\_json\_safe($json\_string)
 
@@ -127,10 +113,6 @@ and never back.
 Though the `encode_json` will try to convert it back to utf8 encoded octets.
 It didn't remember if any of them is originally numeric or multibyte chars already.
 They'll all transfer back to utf8 encoded octets.
-
-### The hash key is not touched
-
-To do it will hurt the performance. If you really need it, let me know.
 
 # SEE ALSO
 
