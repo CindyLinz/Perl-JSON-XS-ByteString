@@ -36,6 +36,9 @@ The module try to achieve that by 3 approaches below:
   that strictly care about if it's string or number.
 
 - Transfer all the utf8 encoded octet into multibyte-char strings before encoding to JSON string.
+  If there're any malform octets, we'll transfer those bytes into questionmarks(?).
+  If you use the \_unsafe version, we'll just leave them there, otherwise we'll recover the questionmarks back
+  to the original malform octets.
 
   If your situation is just like me that we all use utf8 encoded octet all around,
   it's cumbersome and slow that we need to recursively upgrade all the string value into multibyte chars
@@ -64,11 +67,12 @@ Get a JSON string from a perl data structure.
 Before calling to JSON::XS::encode\_json. This function will transfer (modify the input data directly)
 
 - each non-string, non-arrayref, non-hashref scalar into multibyte-char string value
-- each bytes (utf8-octet) into multibyte-char string value
+- each whole bytes (utf8-octet) into multibyte-char string value. when there're any malform octets, transfer them to questionmarks(?).
 
 After that, the function will then transfer
 
 - each multibyte-char string back to bytes (utf8-octet)
+- each questionmark back to original malform octets
 
 ### $json\_string = encode\_json\_unsafe($perl\_value)
 
@@ -102,6 +106,7 @@ Downgrade each string fields of the `$perl_data` to utf8 encoded octets.
 ### decode\_utf8($perl\_data)
 
 Upgrade each string or numeric fields of the `$perl_data` to multibyte chars.
+If there're any malform utf8 octets, transfer them to questionmarks(?).
 
 # CAVEATS
 
@@ -113,6 +118,11 @@ and never back.
 Though the `encode_json` will try to convert it back to utf8 encoded octets.
 It didn't remember if any of them is originally numeric or multibyte chars already.
 They'll all transfer back to utf8 encoded octets.
+
+### The malform octets in the hash key is not handled
+
+The malform octets in the hash key is left as is.
+Then the `JSON::XS::encode_json` will complain about that.
 
 # SEE ALSO
 
