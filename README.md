@@ -35,6 +35,15 @@ The module try to achieve that by 3 approaches below:
   The nondeterministic will make the life harder if the acceptor is writing in other languages
   that strictly care about if it's string or number.
 
+- [EXPERIMENTAL] Transfer all the scalar-ref values into number of its referred values.
+
+  Since the scalar reference is not valid in a JSON structure, we use this form as a stable number hint
+  that will not be changed by how you use the value last time (the JSON::XS' nature).
+
+  Note that C<decode_json> will not do the inverse. It will leave the number value be still a number value,
+  not a reference to a number value.
+
+
 - Transfer all the utf8 encoded octet into multibyte-char strings before encoding to JSON string.
   If there're any malform octets, we'll transfer those bytes into questionmarks(?).
   If you use the \_unsafe version, we'll just leave them there, otherwise we'll recover the questionmarks back
@@ -58,6 +67,11 @@ to Perl data.
 Because in the pure Perl world, there's insignificant difference between numeric or string.
 So I think we don't need to do it since the result will be used in Perl.
 
+### I didn't transfer the numeric value from `json_decode` back to reference values
+
+Let `json_decode` preserve the identical structure as it received.
+
+
 # FUNCTIONS
 
 ### $json\_string = encode\_json($perl\_data)
@@ -78,6 +92,9 @@ After that, the function will then transfer
 
 Same as `encode_json` except the last step after `JSON::XS::encode_json`.
 The argument will be upgraded to multibyte chars and never back.
+
+If there are any scalar reference as numeric hints,
+they will become numeric values.
 
 This function is a little faster than the `encode_json`.
 Use it if you're sure that you'll not use the argument after the JSON call.
