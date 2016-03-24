@@ -8,8 +8,8 @@ require Exporter;
 require JSON::XS;
 
 our @ISA = qw(Exporter);
-our @EXPORT_OK = qw(encode_json encode_json_unsafe decode_json decode_json_safe encode_utf8 decode_utf8);
-our $VERSION = 0.014000;
+our @EXPORT_OK = qw(encode_json encode_json_unsafe encode_json_unblessed encode_json_unblessed_unsafe decode_json decode_json_safe encode_utf8 decode_utf8 encode_utf8_unblessed decode_utf8_unblessed);
+our $VERSION = 0.015000;
 
 require XSLoader;
 XSLoader::load('JSON::XS::ByteString', $VERSION);
@@ -20,12 +20,18 @@ JSON::XS::ByteString - Thin wrapper around fast L<JSON::XS> that makes each JSON
 
 =head1 SYNOPSIS
 
-    use JSON::XS::ByteString qw(encode_json decode_json decode_json_safe encode_utf8 decode_utf8);
+    use JSON::XS::ByteString qw(encode_json encode_json_unblessed decode_json decode_json_safe encode_utf8 decode_utf8 encode_utf8_unblessed decode_utf8_unblessed);
 
     $json_string = encode_json($perl_data);
     $json_string = encode_json_unsafe($perl_data);
     $perl_data = decode_json($json_string);
     $perl_data = decode_json_safe($json_string);
+
+    $json_string = encode_json_unblessed($perl_data);
+    $json_string = encode_json_unblessed_unsafe($perl_data);
+        # the same behavior as encode_json and encode_json_unsafe
+        #  but encode blessed references as reference strings,
+        #  like 'Object=HASH(0xffffffff)'
 
     # low-level tool, I don't use them directly.
     #  But if your situation is not exactly the same as mine,
@@ -34,6 +40,11 @@ JSON::XS::ByteString - Thin wrapper around fast L<JSON::XS> that makes each JSON
         # no return value. downgrade each string field into utf8 encoded octet
     decode_utf8($perl_data);
         # no return value. upgrade each string and numeric field into multibyte chars,
+
+    encode_utf8_unblessed($perl_data);
+    decode_utf8_unblessed($perl_data);
+        # the same as encode_utf8 and decode_utf8,
+        #  but leaves blessed references untouched
 
 =head1 DESCRIPTION
 
@@ -95,6 +106,7 @@ Let C<json_decode> preserve the identical structure as it received.
 =head1 FUNCTIONS
 
 =head2 $json_string = encode_json($perl_data)
+=head2 $json_string = encode_json_unblessed($perl_data)
 
 Get a JSON string from a perl data structure.
 
@@ -118,13 +130,21 @@ After that, the function will then transfer
 
 =back
 
+JSON::XS::encode_json_unblessed will encode blessed references to
+reference string (something like Object=HASH(0xffffffff))
+
 =cut
 sub encode_json {
     decode_utf8_with_orig($_[0]);
+    JSON::XS->new->utf8->allow_blessed->convert_blessed->encode($_[0]);
+}
+sub encode_json_unblessed {
+    decode_utf8_unblessed_with_orig($_[0]);
     JSON::XS::encode_json($_[0]);
 }
 
 =head2 $json_string = encode_json_unsafe($perl_value)
+=head2 $json_string = encode_json_unblessed_unsafe($perl_data)
 
 Same as C<encode_json> except the last step after C<JSON::XS::encode_json>.
 The argument will be upgraded to multibyte chars and never back.
@@ -135,9 +155,16 @@ they will become numeric values.
 This function is a little faster than the C<encode_json>.
 Use it if you're sure that you'll not use the argument after the JSON call.
 
+JSON::XS::encode_json_unblessed_unsafe will encode blessed references
+to reference string (something like Object=HASH(0xffffffff))
+
 =cut
 sub encode_json_unsafe {
     decode_utf8($_[0]);
+    JSON::XS->new->utf8->allow_blessed->convert_blessed->encode($_[0]);
+}
+sub encode_json_unblessed_unsafe {
+    decode_utf8_unblessed($_[0]);
     goto \&JSON::XS::encode_json;
 }
 
@@ -169,14 +196,20 @@ This function is only for convenience.
 sub decode_json_safe { eval { local $SIG{__DIE__}; decode_json($_[0]); } }
 
 =head2 encode_utf8($perl_data)
+=head2 encode_utf8_unblessed($perl_data)
 
 Downgrade each string fields of the C<$perl_data> to utf8 encoded octets.
 
+encode_utf8_unblessed will leave blessed references untouched
+
 =head2 decode_utf8($perl_data)
+=head2 decode_utf8_unblessed($perl_data)
 
 Upgrade each string or numeric fields of the C<$perl_data> to multibyte chars.
 
 If there're any malform utf8 octets, transfer them to questionmarks(?).
+
+decode_utf8_unblessed will leave blessed references untouched
 
 =head1 CAVEATS
 

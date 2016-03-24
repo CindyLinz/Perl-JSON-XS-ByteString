@@ -8,7 +8,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 19;
+use Test::More tests => 20;
 BEGIN { use_ok('JSON::XS::ByteString') };
 
 #########################
@@ -60,4 +60,11 @@ is(JSON::XS::ByteString::encode_json([join '', map { chr hex $_ } qw(F5 84 81 B9
     is(JSON::XS::ByteString::encode_json($data), '["a",2,"3",12]', "scalar ref as number hint twice");
     is(JSON::XS::ByteString::encode_json_unsafe($data), '["a",2,"3",12]', "scalar ref as number hint unsafe");
     isnt(JSON::XS::ByteString::encode_json_unsafe($data), '["a",2,"3",12]', "scalar ref as number hint unsafe twice");
+}
+
+{
+    my $array_obj = bless [3], 'array';
+    my $hash_obj = bless {a => 2}, 'hash';
+    my $data = ['a', $array_obj, 4, $hash_obj];
+    is(JSON::XS::ByteString::encode_json_unblessed($data), qq(["a","$array_obj","4","$hash_obj"]));
 }

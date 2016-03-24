@@ -1,5 +1,8 @@
 Revision history for Perl extension gutil::JSON2::XS.
 
+0.15.0 2016.5.24
+    Deal with blessed references
+
 0.14.0 2014.9.12
     Add numeric semantics [EXPERIMENTAL]
 

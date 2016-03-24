@@ -1,4 +1,4 @@
-gutil-JSON2-XS version 0.9.0
+gutil-JSON2-XS version 0.15.0
 ===========================
 
 Thin wrapper around fast JSON::XS that makes each JSON fields as string, and Perl fields as bytes (utf8 octet)
@@ -22,7 +22,7 @@ COPYRIGHT AND LICENCE
 
 Put the correct copyright and licence information here.
 
-Copyright (C) 2014 by cindy
+Copyright (C) 2014-2016 by cindy
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself, either Perl version 5.16.3 or,

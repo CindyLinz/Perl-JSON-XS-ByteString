@@ -44,7 +44,7 @@ struct Hook_t {
         p = curr->slot; \
     }
 
-#define ENCODE_UTF8(data, USE_SHADOW, USE_SHADOW_NV) { \
+#define ENCODE_UTF8(data, UNBLESSED_ONLY, USE_SHADOW, USE_SHADOW_NV) { \
     struct StackCell_t head, *tail, *curr; \
     SV ** p; \
 \
@@ -58,7 +58,7 @@ struct Hook_t {
             p = curr->slot + JSON2_STACK_CELL_SIZE; \
         } \
         data = *--p; \
-        if( SvROK(data) ){ \
+        if( SvROK(data) && !(UNBLESSED_ONLY && SvSTASH(SvRV(data))) ){ \
             SV *deref = SvRV(data); \
             switch( SvTYPE(deref) ){ \
                 case SVt_PVAV: \
@@ -111,9 +111,15 @@ static void shadow_free(pTHX_ void *hook)
 {
     struct Shadow_t *shadow = ((struct Hook_t*)hook)->shadow;
     SV *data = ((struct Hook_t*)hook)->root;
-    ENCODE_UTF8(data, \
-        if( shadow && shadow->new_str==SvPVX(data) ){ \
-            SvPV_set(data, shadow->ori.str); \
+    ENCODE_UTF8(data, false, \
+        if( shadow && shadow->new_str+1==SvPVX(data) ){ \
+            if( shadow->new_str[0]==0 ) \
+                SvPV_set(data, shadow->ori.str); \
+            else{ \
+                SvUPGRADE(data, SVt_RV); \
+                SvROK_on(data); \
+                SvRV_set(data, shadow->ori.sv); \
+            } \
             shadow = shadow->next; \
         }, \
         { \
@@ -254,9 +260,14 @@ MODULE = JSON::XS::ByteString		PACKAGE = JSON::XS::ByteString
 void
 encode_utf8(SV *data)
     CODE:
-        ENCODE_UTF8(data, /* */, ;);
+        ENCODE_UTF8(data, false, /* */, ;);
 
-#define DECODE_UTF8(data, FORK_TO_HINT_TABLE, SAVE_ORI_SV_TO_HINT_TABLE) { \
+void
+encode_utf8_unblessed(SV *data)
+    CODE:
+        ENCODE_UTF8(data, true, /* */, ;);
+
+#define DECODE_UTF8(data, UNBLESSED_ONLY, FORK_TO_HINT_TABLE, SAVE_ORI_SV_TO_HINT_TABLE, SAVE_ORI_OBJ_TO_HINT_TABLE) { \
     struct StackCell_t head, *tail, *curr; \
     SV ** p; \
     SV *root = data; \
@@ -273,6 +284,12 @@ encode_utf8(SV *data)
         data = *--p; \
         if( SvROK(data) ){ \
             SV *deref = SvRV(data); \
+            if( UNBLESSED_ONLY && SvSTASH(deref) ){ \
+                STRLEN str_len_dummy; \
+                SAVE_ORI_OBJ_TO_HINT_TABLE; \
+                SvPV_force(data, str_len_dummy); \
+                continue; \
+            } \
             U32 ref_type = SvTYPE(deref); \
             if( ref_type==SVt_PVAV ){ \
                 SV **arr = AvARRAY((AV*)deref); \
@@ -322,44 +339,67 @@ encode_utf8(SV *data)
 void
 decode_utf8(SV *data)
     CODE:
-        DECODE_UTF8(data, q = p;, ;);
+        DECODE_UTF8(data, false, q = p;, ;, ;);
+
+void
+decode_utf8_unblessed(SV *data)
+    CODE:
+        DECODE_UTF8(data, true, q = p;, ;, ;);
+
+#define DECODE_UTF8_WITH_ORIG(UNBLESSED_ONLY) { \
+    struct Hook_t *hook; \
+    struct Shadow_t shadow_head, *shadow_tail; \
+    shadow_tail = &shadow_head; \
+ \
+    Newx(hook, 1, struct Hook_t); \
+    hook->root = data; \
+ \
+    LEAVE; \
+    DECODE_UTF8(data, UNBLESSED_ONLY, \
+        { \
+            STRLEN total_len = SvCUR(sv); \
+            struct Shadow_t *new_shadow = (struct Shadow_t*) safemalloc(sizeof(struct Shadow_t) + total_len + 2); \
+            char *new_str = new_shadow->new_str + 1; \
+            char *ori_str; \
+            new_shadow->new_str[0] = 0; \
+            SvOOK_off(sv); \
+            ori_str = SvPVX(sv); \
+            new_shadow->ori.str = ori_str; \
+            SvPV_set(sv, new_str); \
+            shadow_tail->next = new_shadow; \
+            shadow_tail = new_shadow; \
+            Copy(ori_str, new_str, total_len-len, char); \
+            q = (unsigned char*)new_str + (p - (unsigned char*)ori_str); \
+            new_str[total_len] = 0; \
+        }, \
+        { \
+            struct Shadow_t *new_shadow = (struct Shadow_t*) safemalloc(sizeof(struct Shadow_t)); \
+            new_shadow->ori.sv = deref; \
+            shadow_tail->next = new_shadow; \
+            shadow_tail = new_shadow; \
+            SvREFCNT_inc_void_NN(deref); \
+        }, \
+        { \
+            struct Shadow_t *new_shadow = (struct Shadow_t*) safemalloc(sizeof(struct Shadow_t) + 1); \
+            new_shadow->ori.sv = deref; \
+            new_shadow->new_str[0] = 1; \
+            shadow_tail->next = new_shadow; \
+            shadow_tail = new_shadow; \
+            SvREFCNT_inc_void_NN(deref); \
+        } \
+    ); \
+    shadow_tail->next = NULL; \
+    hook->shadow = shadow_head.next; \
+    SAVEDESTRUCTOR_X(shadow_free, hook); \
+    ENTER; \
+}
 
 void
 decode_utf8_with_orig(SV *data)
     CODE:
-        struct Hook_t *hook;
-        struct Shadow_t shadow_head, *shadow_tail;
-        shadow_tail = &shadow_head;
+        DECODE_UTF8_WITH_ORIG(false);
 
-        Newx(hook, 1, struct Hook_t);
-        hook->root = data;
-
-        LEAVE;
-        DECODE_UTF8(data, \
-            { \
-                STRLEN total_len = SvCUR(sv); \
-                struct Shadow_t *new_shadow = (struct Shadow_t*) safemalloc(sizeof(struct Shadow_t) + total_len + 1); \
-                char *new_str = new_shadow->new_str; \
-                char *ori_str; \
-                SvOOK_off(sv); \
-                ori_str = SvPVX(sv); \
-                new_shadow->ori.str = ori_str; \
-                SvPV_set(sv, new_str); \
-                shadow_tail->next = new_shadow; \
-                shadow_tail = new_shadow; \
-                Copy(ori_str, new_str, total_len-len, char); \
-                q = (unsigned char*)new_str + (p - (unsigned char*)ori_str); \
-                new_str[total_len] = 0; \
-            }, \
-            { \
-                struct Shadow_t *new_shadow = (struct Shadow_t*) safemalloc(sizeof(struct Shadow_t)); \
-                new_shadow->ori.sv = deref; \
-                shadow_tail->next = new_shadow; \
-                shadow_tail = new_shadow; \
-                SvREFCNT_inc_void_NN(deref); \
-            } \
-        );
-        shadow_tail->next = NULL;
-        hook->shadow = shadow_head.next;
-        SAVEDESTRUCTOR_X(shadow_free, hook);
-        ENTER;
+void
+decode_utf8_unblessed_with_orig(SV *data)
+    CODE:
+        DECODE_UTF8_WITH_ORIG(true);
