@@ -112,15 +112,19 @@ static void shadow_free(pTHX_ void *hook)
     struct Shadow_t *shadow = ((struct Hook_t*)hook)->shadow;
     SV *data = ((struct Hook_t*)hook)->root;
     ENCODE_UTF8(data, false, \
-        if( shadow && shadow->new_str+1==SvPVX(data) ){ \
-            if( shadow->new_str[0]==0 ) \
-                SvPV_set(data, shadow->ori.str); \
-            else{ \
-                SvUPGRADE(data, SVt_RV); \
-                SvROK_on(data); \
-                SvRV_set(data, shadow->ori.sv); \
+        { \
+            if( shadow ){ \
+                if( shadow->new_str+1==SvPVX(data) ){ \
+                    SvPV_set(data, shadow->ori.str); \
+                    shadow = shadow->next; \
+                } \
+                else if( shadow->new_str[0]==1 && *(SV**)(shadow->new_str + 1)==data ){ \
+                    SvUPGRADE(data, SVt_RV); \
+                    SvROK_on(data); \
+                    SvRV_set(data, shadow->ori.sv); \
+                    shadow = shadow->next; \
+                } \
             } \
-            shadow = shadow->next; \
         }, \
         { \
             SvUPGRADE(data, SVt_RV); \
@@ -361,7 +365,6 @@ decode_utf8_unblessed(SV *data)
             struct Shadow_t *new_shadow = (struct Shadow_t*) safemalloc(sizeof(struct Shadow_t) + total_len + 2); \
             char *new_str = new_shadow->new_str + 1; \
             char *ori_str; \
-            new_shadow->new_str[0] = 0; \
             SvOOK_off(sv); \
             ori_str = SvPVX(sv); \
             new_shadow->ori.str = ori_str; \
@@ -380,9 +383,10 @@ decode_utf8_unblessed(SV *data)
             SvREFCNT_inc_void_NN(deref); \
         }, \
         { \
-            struct Shadow_t *new_shadow = (struct Shadow_t*) safemalloc(sizeof(struct Shadow_t) + 1); \
-            new_shadow->ori.sv = deref; \
+            struct Shadow_t *new_shadow = (struct Shadow_t*) safemalloc(sizeof(struct Shadow_t) + sizeof(SV*) + 1); \
             new_shadow->new_str[0] = 1; \
+            *(SV**)(new_shadow->new_str + 1) = data; \
+            new_shadow->ori.sv = deref; \
             shadow_tail->next = new_shadow; \
             shadow_tail = new_shadow; \
             SvREFCNT_inc_void_NN(deref); \

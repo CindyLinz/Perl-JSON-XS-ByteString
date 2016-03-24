@@ -8,7 +8,9 @@
 use strict;
 use warnings;
 
-use Test::More tests => 20;
+use Data::Dumper;
+
+use Test::More tests => 21;
 BEGIN { use_ok('JSON::XS::ByteString') };
 
 #########################
@@ -65,6 +67,9 @@ is(JSON::XS::ByteString::encode_json([join '', map { chr hex $_ } qw(F5 84 81 B9
 {
     my $array_obj = bless [3], 'array';
     my $hash_obj = bless {a => 2}, 'hash';
-    my $data = ['a', $array_obj, 4, $hash_obj];
+    my $data = ['a', $array_obj, '4', $hash_obj];
+    my $before_json = Dumper($data);
     is(JSON::XS::ByteString::encode_json_unblessed($data), qq(["a","$array_obj","4","$hash_obj"]));
+    my $after_json = Dumper($data);
+    is($before_json, $after_json);
 }
