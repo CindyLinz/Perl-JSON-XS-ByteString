@@ -111,7 +111,7 @@ static void shadow_free(pTHX_ void *hook)
 {
     struct Shadow_t *shadow = ((struct Hook_t*)hook)->shadow;
     SV *data = ((struct Hook_t*)hook)->root;
-    ENCODE_UTF8(data, false, \
+    ENCODE_UTF8(data, FALSE, \
         { \
             if( shadow ){ \
                 if( shadow->new_str+1==SvPVX(data) ){ \
@@ -264,12 +264,12 @@ MODULE = JSON::XS::ByteString		PACKAGE = JSON::XS::ByteString
 void
 encode_utf8(SV *data)
     CODE:
-        ENCODE_UTF8(data, false, /* */, ;);
+        ENCODE_UTF8(data, FALSE, /* */, ;);
 
 void
 encode_utf8_unblessed(SV *data)
     CODE:
-        ENCODE_UTF8(data, true, /* */, ;);
+        ENCODE_UTF8(data, TRUE, /* */, ;);
 
 #define DECODE_UTF8(data, UNBLESSED_ONLY, FORK_TO_HINT_TABLE, SAVE_ORI_SV_TO_HINT_TABLE, SAVE_ORI_OBJ_TO_HINT_TABLE) { \
     struct StackCell_t head, *tail, *curr; \
@@ -343,12 +343,12 @@ encode_utf8_unblessed(SV *data)
 void
 decode_utf8(SV *data)
     CODE:
-        DECODE_UTF8(data, false, q = p;, ;, ;);
+        DECODE_UTF8(data, FALSE, q = p;, ;, ;);
 
 void
 decode_utf8_unblessed(SV *data)
     CODE:
-        DECODE_UTF8(data, true, q = p;, ;, ;);
+        DECODE_UTF8(data, TRUE, q = p;, ;, ;);
 
 #define DECODE_UTF8_WITH_ORIG(UNBLESSED_ONLY) { \
     struct Hook_t *hook; \
@@ -401,9 +401,9 @@ decode_utf8_unblessed(SV *data)
 void
 decode_utf8_with_orig(SV *data)
     CODE:
-        DECODE_UTF8_WITH_ORIG(false);
+        DECODE_UTF8_WITH_ORIG(FALSE);
 
 void
 decode_utf8_unblessed_with_orig(SV *data)
     CODE:
-        DECODE_UTF8_WITH_ORIG(true);
+        DECODE_UTF8_WITH_ORIG(TRUE);
