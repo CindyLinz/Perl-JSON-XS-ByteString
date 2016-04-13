@@ -10,7 +10,7 @@ use warnings;
 
 use Data::Dumper;
 
-use Test::More tests => 21;
+use Test::More tests => 23;
 BEGIN { use_ok('JSON::XS::ByteString') };
 
 #########################
@@ -71,5 +71,12 @@ is(JSON::XS::ByteString::encode_json([join '', map { chr hex $_ } qw(F5 84 81 B9
     my $before_json = Dumper($data);
     is(JSON::XS::ByteString::encode_json_unblessed($data), qq(["a","$array_obj","4","$hash_obj"]));
     my $after_json = Dumper($data);
+    is($before_json, $after_json);
+}
+{
+    my $hash = {'now' => 1.123};
+    my $before_json = Dumper($hash);
+    is(JSON::XS::ByteString::encode_json($hash), qq({"now":"1.123"}));
+    my $after_json = Dumper($hash);
     is($before_json, $after_json);
 }

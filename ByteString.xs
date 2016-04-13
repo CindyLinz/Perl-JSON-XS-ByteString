@@ -92,12 +92,12 @@ struct Hook_t {
                 default: ; \
             } \
         } \
-        if( SvNOK(data) ) { \
-            USE_SHADOW_NV; \
-        } \
         if( SvPOK(data) ){ \
             USE_SHADOW; \
             SvUTF8_off(data); \
+        } \
+        else if( SvNOK(data) ) { \
+            USE_SHADOW_NV; \
         } \
     } \
     while( tail!=&head ){ \
