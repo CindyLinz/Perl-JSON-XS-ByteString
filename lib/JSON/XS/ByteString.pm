@@ -5,11 +5,10 @@ use strict;
 use warnings;
 
 require Exporter;
-require JSON::XS;
 
 our @ISA = qw(Exporter);
-our @EXPORT_OK = qw(encode_json encode_json_unsafe encode_json_unblessed encode_json_unblessed_unsafe decode_json decode_json_safe encode_utf8 decode_utf8 encode_utf8_unblessed decode_utf8_unblessed);
-our $VERSION = 0.015003;
+our @EXPORT_OK = qw(encode_json encode_json_unblessed decode_json decode_json_safe);
+our $VERSION = 1.000000;
 
 require XSLoader;
 XSLoader::load('JSON::XS::ByteString', $VERSION);
@@ -23,13 +22,11 @@ JSON::XS::ByteString - Thin wrapper around fast L<JSON::XS> that makes each JSON
     use JSON::XS::ByteString qw(encode_json encode_json_unblessed decode_json decode_json_safe encode_utf8 decode_utf8 encode_utf8_unblessed decode_utf8_unblessed);
 
     $json_string = encode_json($perl_data);
-    $json_string = encode_json_unsafe($perl_data);
     $perl_data = decode_json($json_string);
     $perl_data = decode_json_safe($json_string);
 
     $json_string = encode_json_unblessed($perl_data);
-    $json_string = encode_json_unblessed_unsafe($perl_data);
-        # the same behavior as encode_json and encode_json_unsafe
+        # the same behavior as encode_json
         #  but encode blessed references as reference strings,
         #  like 'Object=HASH(0xffffffff)'
 
@@ -75,8 +72,6 @@ not a reference to a number value.
 =item *
 Transfer all the utf8 encoded octet into multibyte-char strings before encoding to JSON string.
 If there're any malform octets, we'll transfer those bytes into questionmarks(?).
-If you use the _unsafe version, we'll just leave them there, otherwise we'll recover the questionmarks back
-to the original malform octets.
 
 If your situation is just like me that we all use utf8 encoded octet all around,
 it's cumbersome and slow that we need to recursively upgrade all the string value into multibyte chars
@@ -134,39 +129,6 @@ JSON::XS::encode_json_unblessed will encode blessed references to
 reference string (something like Object=HASH(0xffffffff))
 
 =cut
-sub encode_json {
-    decode_utf8_with_orig($_[0]);
-    JSON::XS->new->utf8->allow_blessed->convert_blessed->encode($_[0]);
-}
-sub encode_json_unblessed {
-    decode_utf8_unblessed_with_orig($_[0]);
-    JSON::XS::encode_json($_[0]);
-}
-
-=head2 $json_string = encode_json_unsafe($perl_value)
-=head2 $json_string = encode_json_unblessed_unsafe($perl_data)
-
-Same as C<encode_json> except the last step after C<JSON::XS::encode_json>.
-The argument will be upgraded to multibyte chars and never back.
-
-If there are any scalar reference as numeric hints,
-they will become numeric values.
-
-This function is a little faster than the C<encode_json>.
-Use it if you're sure that you'll not use the argument after the JSON call.
-
-JSON::XS::encode_json_unblessed_unsafe will encode blessed references
-to reference string (something like Object=HASH(0xffffffff))
-
-=cut
-sub encode_json_unsafe {
-    decode_utf8($_[0]);
-    JSON::XS->new->utf8->allow_blessed->convert_blessed->encode($_[0]);
-}
-sub encode_json_unblessed_unsafe {
-    decode_utf8_unblessed($_[0]);
-    goto \&JSON::XS::encode_json;
-}
 
 =head2 $perl_data = decode_json($json_string)
 
@@ -178,54 +140,17 @@ will transfer each multibyte-char string field into bytes (utf8-octet)
 Note that only the string values are converted, the numeric ones are not.
 
 =cut
-sub decode_json {
-    my $res = JSON::XS::decode_json($_[0]);
-    encode_utf8($res);
-    $res;
-}
 
 =head2 $perl_data = decode_json_safe($json_string)
 
-The same as C<decode_json> but wrap it around an C<eval> block and suppress
-the C<$SIG{__DIE__}> signal.
-We'll get an C<undef> value back when decode fail.
+The same as C<decode_json>
 
 This function is only for convenience.
 
 =cut
-sub decode_json_safe { eval { local $SIG{__DIE__}; decode_json($_[0]); } }
-
-=head2 encode_utf8($perl_data)
-=head2 encode_utf8_unblessed($perl_data)
-
-Downgrade each string fields of the C<$perl_data> to utf8 encoded octets.
-
-encode_utf8_unblessed will leave blessed references untouched
-
-=head2 decode_utf8($perl_data)
-=head2 decode_utf8_unblessed($perl_data)
-
-Upgrade each string or numeric fields of the C<$perl_data> to multibyte chars.
-
-If there're any malform utf8 octets, transfer them to questionmarks(?).
-
-decode_utf8_unblessed will leave blessed references untouched
+*decode_json_safe = \&JSON::XS::ByteString::decode_json;
 
 =head1 CAVEATS
-
-=head2 The input argument of C<encode_json> / C<encnode_json_unsafe> will be changed
-
-The C<encode_json_unsafe> will upgrade all the string or numeric scalar into multibyte char strings
-and never back.
-
-Though the C<encode_json> will try to convert it back to utf8 encoded octets.
-It didn't remember if any of them is originally numeric or multibyte chars already.
-They'll all transfer back to utf8 encoded octets.
-
-=head2 The malform octets in the hash key is not handled
-
-The malform octets in the hash key is left as is.
-Then the C<JSON::XS::encode_json> will complain about that.
 
 =head1 SEE ALSO
 

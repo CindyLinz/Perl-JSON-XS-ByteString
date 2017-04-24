@@ -11,399 +11,413 @@
 #  define LIKELY(x) (x)
 #endif
 
-#define JSON2_STACK_CELL_SIZE 1022
-struct StackCell_t {
-    struct StackCell_t *prev, *next;
-    SV* slot[JSON2_STACK_CELL_SIZE];
-};
+#define CONCAT_PASTE(prefix, suffix) prefix ## suffix
+#define CONCAT(prefix, suffix) CONCAT_PASTE(prefix, suffix)
 
-struct Shadow_t {
-    union {
-        char *str;
-        SV *sv;
-    } ori;
-    struct Shadow_t *next;
-    char new_str[0]; // var length
-};
-
-struct Hook_t {
-    SV *root;
-    struct Shadow_t *shadow;
-};
-
-#define SHIFT_AND_EXTEND_JSON2_STACK \
-    if( p == curr->slot + JSON2_STACK_CELL_SIZE ){ \
-        if( !curr->next ){ \
-            struct StackCell_t *next; \
-            Newx(next, 1, struct StackCell_t); \
-            curr->next = next; \
-            next->prev = curr; \
-            next->next = NULL; \
-        } \
-        tail = curr = curr->next; \
-        p = curr->slot; \
+static inline STRLEN estimate_str(unsigned char * str, STRLEN len){
+    STRLEN out_len = len+2;
+    for(unsigned char * str_end=str+len; str!=str_end; ++str){
+        if( *str < 0x20 ){
+            switch( *str ){
+                case '\n': case '\t': case '\r': case '\b': case '\f':
+                    ++out_len;
+                    break;
+                default:
+                    out_len += 5;
+            }
+        }
+        else switch( *str ){
+            case '\\': case '"':
+                ++out_len;
+        }
     }
-
-#define ENCODE_UTF8(data, UNBLESSED_ONLY, USE_SHADOW, USE_SHADOW_NV) { \
-    struct StackCell_t head, *tail, *curr; \
-    SV ** p; \
-\
-    curr = tail = &head; \
-    p = head.slot; \
-    head.prev = head.next = NULL; \
-    *p++ = data; \
-    while( p!=head.slot ){ \
-        if( p == curr->slot ){ \
-            curr = curr->prev; \
-            p = curr->slot + JSON2_STACK_CELL_SIZE; \
-        } \
-        data = *--p; \
-        if( SvROK(data) && !(UNBLESSED_ONLY && SvSTASH(SvRV(data))) ){ \
-            SV *deref = SvRV(data); \
-            switch( SvTYPE(deref) ){ \
-                case SVt_PVAV: \
-                    { \
-                        SV **arr = AvARRAY((AV*)deref); \
-                        I32 i; \
-                        for(i=av_len((AV*)deref); i>=0; --i){ \
-                            *p++ = arr[i]; \
-                            SHIFT_AND_EXTEND_JSON2_STACK; \
-                        } \
-                        continue; \
-                    } \
-                case SVt_PVHV: \
-                    { \
-                        HE *entry; \
-                        hv_iterinit((HV*)deref); \
-                        while( (entry = hv_iternext((HV*)deref)) ){ \
-                            *p++ = HeVAL(entry); \
-                            SHIFT_AND_EXTEND_JSON2_STACK; \
-\
-                            if( HeKLEN(entry)==HEf_SVKEY ){ \
-                                SV *data = HeKEY_sv(entry); \
-                                USE_SHADOW; \
-                                SvUTF8_off(data); \
-                            } \
-                            else \
-                                HEK_UTF8_off(HeKEY_hek(entry)); \
-                        } \
-                        continue; \
-                    } \
-                default: ; \
-            } \
-        } \
-        if( SvPOK(data) ){ \
-            USE_SHADOW; \
-            SvUTF8_off(data); \
-        } \
-        else if( SvNOK(data) ) { \
-            USE_SHADOW_NV; \
-        } \
-    } \
-    while( tail!=&head ){ \
-        curr = tail->prev; \
-        safefree(tail); \
-        tail = curr; \
-    } \
+    return out_len;
 }
 
-static void shadow_free(pTHX_ void *hook)
-{
-    struct Shadow_t *shadow = ((struct Hook_t*)hook)->shadow;
-    SV *data = ((struct Hook_t*)hook)->root;
-    ENCODE_UTF8(data, FALSE, \
-        { \
-            if( shadow ){ \
-                if( shadow->new_str+1==SvPVX(data) ){ \
-                    SvPV_set(data, shadow->ori.str); \
-                    shadow = shadow->next; \
-                } \
-                else if( shadow->new_str[0]==1 && *(SV**)(shadow->new_str + 1)==data ){ \
-                    SvUPGRADE(data, SVt_RV); \
-                    SvROK_on(data); \
-                    SvRV_set(data, shadow->ori.sv); \
-                    shadow = shadow->next; \
-                } \
-            } \
-        }, \
-        { \
-            SvUPGRADE(data, SVt_RV); \
-            SvROK_on(data); \
-            SvRV_set(data, shadow->ori.sv); \
-            shadow = shadow->next; \
-        } \
-    );
-    shadow = ((struct Hook_t*)hook)->shadow;
-    while( shadow ){
-        struct Shadow_t *q = shadow->next;
-        safefree(shadow);
-        shadow = q;
+static inline char hex(unsigned char ch){
+    if( ch>9 )
+        return 'A' + ch - 10;
+    else
+        return '0' + ch;
+}
+static inline unsigned int decode_hex(unsigned char ch){
+    if( ch<='9' )
+        return ch - '0';
+    if( ch<='Z' )
+        return ch - 'A' + 10;
+    return ch - 'a' + 10;
+}
+
+static inline unsigned char * encode_str(unsigned char * buffer, unsigned char * str, STRLEN len){
+    *buffer++ = '"';
+    for(unsigned char * str_end=str+len; str!=str_end; ++str){
+        if( *str < 0x20 ){
+            *buffer++ = '\\';
+            switch( *str ){
+                case '\n':
+                    *buffer++ = 'n';
+                    break;
+                case '\t':
+                    *buffer++ = 't';
+                    break;
+                case '\r':
+                    *buffer++ = 'r';
+                    break;
+                case '\b':
+                    *buffer++ = 'b';
+                    break;
+                case '\f':
+                    *buffer++ = 'f';
+                    break;
+                default:
+                    *buffer++ = 'u';
+                    *buffer++ = '0';
+                    *buffer++ = '0';
+                    *buffer++ = hex(*str >> 4);
+                    *buffer++ = hex(*str & 15);
+            }
+        }
+        else switch( *str ){
+            case '\\':
+                *buffer++ = '\\';
+                *buffer++ = '\\';
+                break;
+            case '"':
+                *buffer++ = '\\';
+                *buffer++ = '"';
+                break;
+            default:
+                *buffer++ = *str;
+        }
     }
-    Safefree(hook);
+    *buffer++ = '"';
+    return buffer;
+}
+
+#define NAME normal
+#define UNBLESSED FALSE
+#include "encode_gen.h"
+#undef UNBLESSED
+#undef NAME
+
+#define NAME unblessed
+#define UNBLESSED TRUE
+#include "encode_gen.h"
+#undef UNBLESSED
+#undef NAME
+
+static inline unsigned char * skip_space(unsigned char * str, unsigned char * str_end){
+    while( str!=str_end && isSPACE(*str) )
+        ++str;
+    return str;
+}
+
+static inline bool is_identity(unsigned char ch){
+    return !isSPACE(ch) && ch!=',' && ch!=':' && ch!=']' && ch!='}';
+}
+
+static inline STRLEN estimate_orig_str(unsigned char * str, unsigned char * str_end){
+    if( str==str_end )
+        return 0;
+    if( *str=='"' ){
+        ++str;
+        STRLEN len = 0;
+        while(TRUE){
+            if( str==str_end || *str=='"' )
+                return len;
+            if( *str=='\\' ){
+                ++str;
+                switch( *str++ ){
+                    case 'u': {
+                        unsigned int d = 0;
+
+                        if( str!=str_end && isXDIGIT(*str) )
+                            d = (d << 4) + decode_hex(*str++);
+                        if( str!=str_end && isXDIGIT(*str) )
+                            d = (d << 4) + decode_hex(*str++);
+                        if( str!=str_end && isXDIGIT(*str) )
+                            d = (d << 4) + decode_hex(*str++);
+                        if( str!=str_end && isXDIGIT(*str) )
+                            d = (d << 4) + decode_hex(*str++);
+
+                        if( d <= 0x7f )
+                            ++len;
+                        else if( d <= 0x7ff )
+                            len += 2;
+                        else if( d <= 0xffff )
+                            len += 3;
+                        else
+                            len += 4;
+
+                        break;
+                    }
+                    case 'n': case '\\': case '"': case 't': case 'r': case 'b': case 'f':
+                        ++len;
+                        break;
+                    default:
+                        len += 2;
+                }
+            }
+            else{
+                ++len;
+                ++str;
+            }
+        }
+    }
+    else{
+        STRLEN len = 0;
+        while( str!=str_end && is_identity(*str) ){
+            ++len;
+            ++str;
+        }
+        return len;
+    }
+}
+
+static inline unsigned char * decode_str_r(unsigned char * str, unsigned char * str_end, unsigned char ** out, unsigned char ** out_capacity_end, unsigned char ** out_end){
+    STRLEN len = estimate_orig_str(str, str_end);
+    if( !*out ){
+        Newx(*out, len+1, unsigned char);
+        *out_capacity_end = *out + len + 1;
+    }
+    else if( *out_capacity_end - *out < len + 1 ){
+        Renew(*out, len+1, unsigned char);
+        *out_capacity_end = *out + len + 1;
+    }
+
+    *out_end = *out + len;
+    **out_end = 0;
+    unsigned char * out_cur = *out;
+
+    if( *str=='"' ){
+        ++str;
+        while(TRUE){
+            if( str==str_end )
+                return str;
+            if( *str=='"' )
+                return str+1;
+            if( *str=='\\' ){
+                ++str;
+                switch( *str++ ){
+                    case 'u': {
+                        unsigned int d = 0;
+
+                        if( str!=str_end && isXDIGIT(*str) )
+                            d = (d << 4) + decode_hex(*str++);
+                        if( str!=str_end && isXDIGIT(*str) )
+                            d = (d << 4) + decode_hex(*str++);
+                        if( str!=str_end && isXDIGIT(*str) )
+                            d = (d << 4) + decode_hex(*str++);
+                        if( str!=str_end && isXDIGIT(*str) )
+                            d = (d << 4) + decode_hex(*str++);
+
+                        if( d <= 0x7f )
+                            *out_cur++ = (unsigned char) d;
+                        else if( d <= 0x7ff ){
+                            *out_cur++ = (unsigned char)(d >> 6 | 0xC0);
+                            *out_cur++ = (unsigned char)(d & 0x3F | 0x80);
+                        }
+                        else if( d <= 0xffff ){
+                            *out_cur++ = (unsigned char)(d >> 12 | 0xE0);
+                            *out_cur++ = (unsigned char)(d >> 6 & 0x3F | 0x80);
+                            *out_cur++ = (unsigned char)(d & 0x3F | 0x80);
+                        }
+                        else{
+                            *out_cur++ = (unsigned char)(d >> 18 | 0xF0);
+                            *out_cur++ = (unsigned char)(d >> 12 & 0x3F | 0x80);
+                            *out_cur++ = (unsigned char)(d >> 6 & 0x3F | 0x80);
+                            *out_cur++ = (unsigned char)(d & 0x3F | 0x80);
+                        }
+
+                        break;
+                    }
+                    case 'n':
+                        *out_cur++ = '\n';
+                        break;
+                    case '\\':
+                        *out_cur++ = '\\';
+                        break;
+                    case '"':
+                        *out_cur++ = '"';
+                        break;
+                    case 't':
+                        *out_cur++ = '\t';
+                        break;
+                    case 'r':
+                        *out_cur++ = '\r';
+                        break;
+                    case 'b':
+                        *out_cur++ = '\b';
+                        break;
+                    case 'f':
+                        *out_cur++ = '\f';
+                        break;
+                    default:
+                        *out_cur++ = '\\';
+                        *out_cur++ = *(str-1);
+                }
+            }
+            else
+                *out_cur++ = *str++;
+        }
+    }
+    else{
+        while( str!=str_end && is_identity(*str) )
+            *out_cur++ = *str++;
+        return str;
+    }
+}
+
+// the created SV has refcnt=1
+unsigned char * decode(unsigned char * str, unsigned char * str_end, SV**out){
+    str = skip_space(str, str_end);
+    if( str==str_end ){
+        *out = NULL;
+        return str;
+    }
+
+    switch( *str ){
+        case '[': {
+            AV * av = newAV();
+            *out = newRV_noinc((SV*) av);
+            ++str;
+            while(TRUE){
+                str = skip_space(str, str_end);
+                if( str==str_end )
+                    return str;
+                if( *str == ']' )
+                    return str+1;
+
+                SV * elem;
+                str = decode(str, str_end, &elem);
+                if( elem==NULL )
+                    return str;
+                av_push(av, elem);
+
+                str = skip_space(str, str_end);
+                if( str==str_end )
+                    return str;
+                if( *str==',' )
+                    ++str;
+            }
+        }
+        case '{': {
+            HV * hv = newHV();
+            *out = newRV_noinc((SV*) hv);
+            ++str;
+            unsigned char *key_buffer=0, *key_buffer_end, *key_end;
+            while(TRUE){
+                str = skip_space(str, str_end);
+                if( str==str_end ){
+                    if( key_buffer )
+                        Safefree(key_buffer);
+                    return str;
+                }
+                if( *str=='}' ){
+                    if( key_buffer )
+                        Safefree(key_buffer);
+                    return str+1;
+                }
+                str = decode_str_r(str, str_end, &key_buffer, &key_buffer_end, &key_end);
+                str = skip_space(str, str_end);
+
+                SV * elem = NULL;
+                if( *str==':' ){
+                    ++str;
+                    str = decode(str, str_end, &elem);
+                }
+                if( elem==NULL )
+                    elem = newSV(0);
+                hv_store(hv, key_buffer, key_end-key_buffer, elem, 0);
+
+                str = skip_space(str, str_end);
+                if( str==str_end ){
+                    Safefree(key_buffer);
+                    return str;
+                }
+                if( *str==',' )
+                    ++str;
+            }
+            break;
+        }
+        case '"': {
+            unsigned char *value_buffer=0, *value_buffer_end, *value_end;
+            str = decode_str_r(str, str_end, &value_buffer, &value_buffer_end, &value_end);
+            *out = newSV(0);
+            sv_upgrade(*out, SVt_PV);
+            SvPOK_on(*out);
+            SvPV_set(*out, value_buffer);
+            SvCUR_set(*out, value_end - value_buffer);
+            SvLEN_set(*out, value_buffer_end - value_buffer);
+            return str;
+        }
+        default: {
+            if( str_end-str==4 || str_end-str>4 && !is_identity(str[4]) ){
+                if( (str[0]=='T' || str[0]=='t') && (str[1]=='R' || str[1]=='r') && (str[2]=='U' || str[2]=='u') && (str[3]=='E' || str[3]=='e') ){
+                    *out = newSViv(1);
+                    return str+4;
+                }
+                if( (str[0]=='N' || str[0]=='n') && (str[1]=='U' || str[1]=='u') && (str[2]=='L' || str[2]=='l') && (str[3]=='L' || str[3]=='l') ){
+                    *out = newSV(0);
+                    return str+4;
+                }
+            }
+            if( str_end-str==5 || str_end-str>5 && !is_identity(str[5]) ){
+                if( (str[0]=='F' || str[0]=='f') && (str[1]=='A' || str[1]=='a') && (str[2]=='L' || str[2]=='l') && (str[3]=='S' || str[3]=='s') && (str[3]=='E' || str[3]=='e') ){
+                    *out = newSVpvn("", 0);
+                    return str+5;
+                }
+            }
+
+            unsigned char *value_buffer=0, *value_buffer_end, *value_end;
+            str = decode_str_r(str, str_end, &value_buffer, &value_buffer_end, &value_end);
+            *out = newSV(0);
+            sv_upgrade(*out, SVt_PV);
+            SvPOK_on(*out);
+            SvPV_set(*out, value_buffer);
+            SvCUR_set(*out, value_end - value_buffer);
+            SvLEN_set(*out, value_buffer_end - value_buffer);
+            return str;
+        }
+    }
 }
 
 MODULE = JSON::XS::ByteString		PACKAGE = JSON::XS::ByteString		
 
-#define MOVING_CHECK_UTF8_TAIL(head_bound, need_len, head_mask, body_mask) \
-    if( *p < head_bound ){ \
-        if( len < need_len || ((*p & head_mask) == 0 && (*(p+1) & body_mask) == 0) || (need_len==4 && (*p>0xF4 || (*p==0xF4 && *(p+1)>=0x90))) ) \
-            break; \
-        { \
-            unsigned char *q = p+1; \
-            STRLEN checked_len = 1; \
-            while( checked_len < need_len ){ \
-                if( *q < 0x80 || 0xC0 <= *q ) \
-                    break; \
-                ++q; \
-                ++checked_len; \
-            } \
-            if( checked_len < need_len ) \
-                break; \
-            p += need_len; \
-            len -= need_len; \
-        } \
-    }
-
-#define MOVING_CHECK_WRITE_UTF8_TAIL(head_bound, need_len, head_mask, body_mask) \
-    if( *p < head_bound ){ \
-        if( len < need_len || ((*p & head_mask) == 0 && (*(p+1) & body_mask) == 0) || (need_len==4 && (*p>0xF4 || (*p==0xF4 && *(p+1)>=0x90))) ){ \
-            *q++ = '?'; \
-            --len; \
-        } \
-        else{ \
-            unsigned char *qq = p+1; \
-            STRLEN checked_len = 1; \
-            while( checked_len < need_len ){ \
-                if( *qq < 0x80 || 0xC0 <= *qq ) \
-                    break; \
-                ++qq; \
-                ++checked_len; \
-            } \
-            if( checked_len < need_len ){ \
-                for(checked_len=0; checked_len<need_len; ++checked_len) \
-                    *q++ = '?'; \
-                p += need_len; \
-            } \
-            else{ \
-                for(checked_len=0; checked_len<need_len; ++checked_len) \
-                    *q++ = *p++; \
-            } \
-            len -= need_len; \
-        } \
-    }
-
-#define SAFE_SvUTF8_on(_sv, FORK_TO_HINT_TABLE) \
-    { \
-        SV *sv = _sv; \
-        STRLEN len = SvCUR(sv); \
-        unsigned char *p = (unsigned char*)SvPVX(sv); \
-        STRLEN i; \
-        if(0){ \
-            STRLEN i; \
-            STRLEN len; \
-            unsigned char * p = (unsigned char*)SvPV(sv, len); \
-            printf("before utf8 on\n"); \
-            for(i=0; i<len; ++i) \
-                printf("%02X ", (unsigned int)p[i]); \
-            puts(""); \
-        } \
-        while( len ){ \
-            if( *p < 0x80 ){ /* 0xxxxxxx (len=1) */ \
-                ++p; \
-                --len; \
-            } \
-            else if( *p < 0xC0 ){ /* 10xxxxxx (illegal head) */ \
-                break; \
-            } \
-            else MOVING_CHECK_UTF8_TAIL(0xE0, 2, 0x1E, 0x00) /* 110xxxxx (len=2) */ \
-            else MOVING_CHECK_UTF8_TAIL(0xF0, 3, 0x0F, 0x20) /* 1110xxxx (len=3) */ \
-            else MOVING_CHECK_UTF8_TAIL(0xF8, 4, 0x07, 0x30) /* 11110xxx (len=4) */ \
-            /* else MOVING_CHECK_UTF8_TAIL(0xFC, 5, 0x03, 0x38) */ /* no 111110xx (len=5) */ \
-            /* else MOVING_CHECK_UTF8_TAIL(0xFE, 6, 0x01, 0x3C) */ /* no 1111110x (len=6) */ \
-            else { /* 1111111x (illegal head) */ \
-                break; \
-            } \
-        } \
-        if( UNLIKELY(len) ){ /* found some illegal octet */ \
-            unsigned char *q; \
-            FORK_TO_HINT_TABLE; \
-            while( len ){ \
-                if( *p < 0x80 ){ /* 0xxxxxxx (len=1) */ \
-                    *q++ = *p++; \
-                    --len; \
-                } \
-                else if( *p < 0xC0 ){ /* 10xxxxxx (illegal head) */ \
-                    ++p; \
-                    *q++ = '?'; \
-                    --len; \
-                } \
-                else MOVING_CHECK_WRITE_UTF8_TAIL(0xE0, 2, 0x1E, 0x00) /* 110xxxxx (len=2) */ \
-                else MOVING_CHECK_WRITE_UTF8_TAIL(0xF0, 3, 0x0F, 0x20) /* 1110xxxx (len=3) */ \
-                else MOVING_CHECK_WRITE_UTF8_TAIL(0xF8, 4, 0x07, 0x30) /* 11110xxx (len=4) */ \
-                /* else MOVING_CHECK_WRITE_UTF8_TAIL(0xFC, 5, 0x03, 0x38) */ /* no 111110xx (len=5) */ \
-                /* else MOVING_CHECK_WRITE_UTF8_TAIL(0xFE, 6, 0x01, 0x3C) */ /* no 1111110x (len=6) */ \
-                else { /* 1111111x (illegal head) */ \
-                    ++p; \
-                    *q++ = '?'; \
-                    --len; \
-                } \
-            } \
-        } \
-        if(0){ \
-            STRLEN i; \
-            STRLEN len; \
-            unsigned char * p = (unsigned char*)SvPV(sv, len); \
-            printf("after utf8 on\n"); \
-            for(i=0; i<len; ++i) \
-                printf("%02X ", (unsigned int)p[i]); \
-            puts(""); \
-        } \
-        SvUTF8_on(sv); \
-    }
+void
+encode_json(SV * data)
+    PPCODE:
+        STRLEN need_size = estimate_normal(data);
+        SV * out_sv = sv_2mortal(newSV(need_size));
+        SvPOK_only(out_sv);
+        char * cur = encode_normal(SvPVX(out_sv), data);
+        SvCUR_set(out_sv, cur - SvPVX(out_sv));
+        *SvEND(out_sv) = 0;
+        PUSHs(out_sv);
 
 void
-encode_utf8(SV *data)
-    CODE:
-        ENCODE_UTF8(data, FALSE, /* */, ;);
+encode_json_unblessed(SV * data)
+    PPCODE:
+        STRLEN need_size = estimate_unblessed(data);
+        SV * out_sv = sv_2mortal(newSV(need_size));
+        SvPOK_only(out_sv);
+        char * cur = encode_unblessed(SvPVX(out_sv), data);
+        SvCUR_set(out_sv, cur - SvPVX(out_sv));
+        *SvEND(out_sv) = 0;
+        PUSHs(out_sv);
 
 void
-encode_utf8_unblessed(SV *data)
-    CODE:
-        ENCODE_UTF8(data, TRUE, /* */, ;);
-
-#define DECODE_UTF8(data, UNBLESSED_ONLY, FORK_TO_HINT_TABLE, SAVE_ORI_SV_TO_HINT_TABLE, SAVE_ORI_OBJ_TO_HINT_TABLE) { \
-    struct StackCell_t head, *tail, *curr; \
-    SV ** p; \
-    SV *root = data; \
-\
-    curr = tail = &head; \
-    p = head.slot; \
-    head.prev = head.next = NULL; \
-    *p++ = data; \
-    while( p!=head.slot ){ \
-        if( p == curr->slot ){ \
-            curr = curr->prev; \
-            p = curr->slot + JSON2_STACK_CELL_SIZE; \
-        } \
-        data = *--p; \
-        if( SvROK(data) ){ \
-            SV *deref = SvRV(data); \
-            if( UNBLESSED_ONLY && SvSTASH(deref) ){ \
-                STRLEN str_len_dummy; \
-                SAVE_ORI_OBJ_TO_HINT_TABLE; \
-                SvPV_force(data, str_len_dummy); \
-                continue; \
-            } \
-            U32 ref_type = SvTYPE(deref); \
-            if( ref_type==SVt_PVAV ){ \
-                SV **arr = AvARRAY((AV*)deref); \
-                I32 i; \
-                for(i=av_len((AV*)deref); i>=0; --i){ \
-                    *p++ = arr[i]; \
-                    SHIFT_AND_EXTEND_JSON2_STACK; \
-                } \
-                continue; \
-            } \
-            if( ref_type==SVt_PVHV ){ \
-                HE *entry; \
-                hv_iterinit((HV*)deref); \
-                while( (entry = hv_iternext((HV*)deref)) ){ \
-                    *p++ = HeVAL(entry); \
-                    SHIFT_AND_EXTEND_JSON2_STACK; \
-\
-                    if( HeKLEN(entry)==HEf_SVKEY ) \
-                        SAFE_SvUTF8_on(HeKEY_sv(entry), FORK_TO_HINT_TABLE) \
-                    else \
-                        HEK_UTF8_on(HeKEY_hek(entry)); \
-                } \
-                continue; \
-            } \
-            if( ref_type < SVt_PVAV ) { \
-                SAVE_ORI_SV_TO_HINT_TABLE; \
-                sv_force_normal_flags(data, SV_COW_DROP_PV); \
-                sv_setnv(data, SvNV(deref)); \
-                continue; \
-            } \
-        } \
-        if( SvPOK(data) ){ \
-            if( SvIsCOW(data) ) \
-                sv_force_normal(data); \
-            SAFE_SvUTF8_on(data, FORK_TO_HINT_TABLE) \
-        } \
-        else if( SvOK(data) ) \
-            SvPVutf8_nolen(data); \
-    } \
-    while( tail!=&head ){ \
-        curr = tail->prev; \
-        safefree(tail); \
-        tail = curr; \
-    } \
-}
-
-void
-decode_utf8(SV *data)
-    CODE:
-        DECODE_UTF8(data, FALSE, q = p;, ;, ;);
-
-void
-decode_utf8_unblessed(SV *data)
-    CODE:
-        DECODE_UTF8(data, TRUE, q = p;, ;, ;);
-
-#define DECODE_UTF8_WITH_ORIG(UNBLESSED_ONLY) { \
-    struct Hook_t *hook; \
-    struct Shadow_t shadow_head, *shadow_tail; \
-    shadow_tail = &shadow_head; \
- \
-    Newx(hook, 1, struct Hook_t); \
-    hook->root = data; \
- \
-    LEAVE; \
-    DECODE_UTF8(data, UNBLESSED_ONLY, \
-        { \
-            STRLEN total_len = SvCUR(sv); \
-            struct Shadow_t *new_shadow = (struct Shadow_t*) safemalloc(sizeof(struct Shadow_t) + total_len + 2); \
-            char *new_str = new_shadow->new_str + 1; \
-            char *ori_str; \
-            SvOOK_off(sv); \
-            ori_str = SvPVX(sv); \
-            new_shadow->ori.str = ori_str; \
-            SvPV_set(sv, new_str); \
-            shadow_tail->next = new_shadow; \
-            shadow_tail = new_shadow; \
-            Copy(ori_str, new_str, total_len-len, char); \
-            q = (unsigned char*)new_str + (p - (unsigned char*)ori_str); \
-            new_str[total_len] = 0; \
-        }, \
-        { \
-            struct Shadow_t *new_shadow = (struct Shadow_t*) safemalloc(sizeof(struct Shadow_t)); \
-            new_shadow->ori.sv = deref; \
-            shadow_tail->next = new_shadow; \
-            shadow_tail = new_shadow; \
-            SvREFCNT_inc_void_NN(deref); \
-        }, \
-        { \
-            struct Shadow_t *new_shadow = (struct Shadow_t*) safemalloc(sizeof(struct Shadow_t) + sizeof(SV*) + 1); \
-            new_shadow->new_str[0] = 1; \
-            *(SV**)(new_shadow->new_str + 1) = data; \
-            new_shadow->ori.sv = deref; \
-            shadow_tail->next = new_shadow; \
-            shadow_tail = new_shadow; \
-            SvREFCNT_inc_void_NN(deref); \
-        } \
-    ); \
-    shadow_tail->next = NULL; \
-    hook->shadow = shadow_head.next; \
-    SAVEDESTRUCTOR_X(shadow_free, hook); \
-    ENTER; \
-}
-
-void
-decode_utf8_with_orig(SV *data)
-    CODE:
-        DECODE_UTF8_WITH_ORIG(FALSE);
-
-void
-decode_utf8_unblessed_with_orig(SV *data)
-    CODE:
-        DECODE_UTF8_WITH_ORIG(TRUE);
+decode_json(SV * json)
+    PPCODE:
+        unsigned char *str, *str_adv;
+        STRLEN len;
+        str = (unsigned char*) SvPV(json, len);
+        SV * out = NULL;
+        str_adv = decode(str, str+len, &out);
+        str_adv = skip_space(str_adv, str+len);
+        if( str+len != str_adv )
+            warn("decode_json: Unconsumed characters from offset %d", str_adv-str);
+        if( out==NULL )
+            PUSHs(&PL_sv_undef);
+        else
+            PUSHs(sv_2mortal(out));

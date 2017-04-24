@@ -10,7 +10,7 @@ use warnings;
 
 use Data::Dumper;
 
-use Test::More tests => 23;
+use Test::More tests => 21;
 BEGIN { use_ok('JSON::XS::ByteString') };
 
 #########################
@@ -25,8 +25,6 @@ my $data2 = JSON::XS::ByteString::decode_json($json);
 my $data3 = JSON::XS::ByteString::decode_json_safe($json);
 is_deeply($data2, $data, 'decode_json');
 is_deeply($data3, $data, 'decode_json');
-my $json2 = JSON::XS::ByteString::encode_json_unsafe($data);
-is($json2, '["Cindy 好漂亮",{"Cindy":"最漂亮了"}]', 'encode_json');
 is_deeply(JSON::XS::ByteString::decode_json(JSON::XS::ByteString::encode_json([undef])), [undef], 'encode/decode undef');
 
 {
@@ -40,36 +38,25 @@ is_deeply(JSON::XS::ByteString::decode_json('{"Cindy 好漂亮":1}'), {"Cindy �
 
 {
     my $data = ["\x80"];
-    is(JSON::XS::ByteString::encode_json($data), qq(["?"]), 'encode wrongly utf8');
+    is(JSON::XS::ByteString::encode_json($data), qq(["\x80"]), 'encode wrongly utf8');
     is_deeply($data, ["\x80"], 'wrongly utf8 back');
 }
 
-{
-    my $data = ["\x43\x69\x6E\x64\x79\x20\x{597D}\x{6F02}\x{4EAE}"];
-    JSON::XS::ByteString::encode_utf8($data);
-    is_deeply($data, ["Cindy 好漂亮"], 'encode_utf8');
-
-    JSON::XS::ByteString::decode_utf8($data);
-    is_deeply($data, ["\x43\x69\x6E\x64\x79\x20\x{597D}\x{6F02}\x{4EAE}"], 'encode_utf8');
-}
-
-is(JSON::XS::ByteString::encode_json([join '', map { chr hex $_ } qw(C0 A2)]), '["??"]', "codepoint shoud be shorter");
-is(JSON::XS::ByteString::encode_json([join '', map { chr hex $_ } qw(F5 84 81 B9)]), '["????"]', "codepoint after U+10FFFF");
+is(JSON::XS::ByteString::encode_json([join '', map { chr hex $_ } qw(C0 A2)]), qq(["\xC0\xA2"]), "codepoint shoud be shorter");
+is(JSON::XS::ByteString::encode_json([join '', map { chr hex $_ } qw(F5 84 81 B9)]), qq(["\xF5\x84\x81\xB9"]), "codepoint after U+10FFFF");
 
 {
     my $data = ['a',\2,3,\'12a'];
     is(JSON::XS::ByteString::encode_json($data), '["a",2,"3",12]', "scalar ref as number hint");
     is(JSON::XS::ByteString::encode_json($data), '["a",2,"3",12]', "scalar ref as number hint twice");
-    is(JSON::XS::ByteString::encode_json_unsafe($data), '["a",2,"3",12]', "scalar ref as number hint unsafe");
-    isnt(JSON::XS::ByteString::encode_json_unsafe($data), '["a",2,"3",12]', "scalar ref as number hint unsafe twice");
 }
 
 {
     my $array_obj = bless [3], 'array';
     my $hash_obj = bless {a => 2}, 'hash';
-    my $data = ['a', $array_obj, '4', $hash_obj];
+    my $data = ['a', $array_obj, '4', $hash_obj, \5];
     my $before_json = Dumper($data);
-    is(JSON::XS::ByteString::encode_json_unblessed($data), qq(["a","$array_obj","4","$hash_obj"]));
+    is(JSON::XS::ByteString::encode_json_unblessed($data), qq(["a","$array_obj","4","$hash_obj",5]));
     my $after_json = Dumper($data);
     is($before_json, $after_json);
 }
@@ -79,4 +66,18 @@ is(JSON::XS::ByteString::encode_json([join '', map { chr hex $_ } qw(F5 84 81 B9
     is(JSON::XS::ByteString::encode_json($hash), qq({"now":"1.123"}));
     my $after_json = Dumper($hash);
     is($before_json, $after_json);
+}
+
+{
+    my @a;
+    $a[1] = 1;
+    is(JSON::XS::ByteString::encode_json(\@a), qq([null,"1"]));
+}
+
+sub f {
+    JSON::XS::ByteString::encode_json(\@_);
+}
+{
+    is(f('Cindy 最漂亮了', 3), qq(["Cindy 最漂亮了","3"]));
+    is(JSON::XS::ByteString::encode_json('Cindy 最漂亮了'), qq("Cindy 最漂亮了"));
 }
