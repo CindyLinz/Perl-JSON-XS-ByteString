@@ -27,7 +27,7 @@ STRLEN CONCAT(estimate_, NAME)(SV * sv){
 
                         I32 keylen;
                         char * key = hv_iterkey(entry, &keylen);
-                        len += estimate_str(key, (STRLEN) keylen);
+                        len += estimate_str((unsigned char*)key, (STRLEN) keylen);
 
                         SV * val = hv_iterval(hv, entry);
                         len += CONCAT(estimate_, NAME)(val);
@@ -36,6 +36,8 @@ STRLEN CONCAT(estimate_, NAME)(SV * sv){
                         ++len;
                     return len;
                 }
+                default:
+                    break;
             }
             if( SvTYPE(rvs) < SVt_PVAV ){
                 NV nv = SvNV(rvs);
@@ -63,7 +65,7 @@ STRLEN CONCAT(estimate_, NAME)(SV * sv){
         if( SvOK(sv) ){
             STRLEN len;
             char * str = SvPV(sv, len);
-            return estimate_str(str, len);
+            return estimate_str((unsigned char*)str, len);
         }
     }
     return 4;
@@ -100,7 +102,7 @@ unsigned char * CONCAT(encode_, NAME)(unsigned char * buffer, SV * sv){
 
                         I32 keylen;
                         char * key = hv_iterkey(entry, &keylen);
-                        buffer = encode_str(buffer, key, (STRLEN) keylen);
+                        buffer = encode_str(buffer, (unsigned char*)key, (STRLEN) keylen);
 
                         *buffer++ = ':';
 
@@ -116,6 +118,8 @@ unsigned char * CONCAT(encode_, NAME)(unsigned char * buffer, SV * sv){
                         *(buffer-1) = '}';
                     return buffer;
                 }
+                default:
+                    break;
             }
             if( SvTYPE(rvs) < SVt_PVAV ){
                 NV nv = SvNV(rvs);
@@ -149,13 +153,13 @@ unsigned char * CONCAT(encode_, NAME)(unsigned char * buffer, SV * sv){
                         digit = u >> 24; *buffer = digit + '0'; buffer += 1; // correctly generate '0'
                     }
                     else{
-                        snprintf(buffer, 100, "%lld", (long long)iv);
+                        snprintf((char*)buffer, 100, "%lld", (long long)iv);
                         while( *buffer )
                             ++buffer;
                     }
                 }
                 else{
-                    snprintf(buffer, 100, "%g", (double) nv);
+                    snprintf((char*)buffer, 100, "%g", (double) nv);
                     while( *buffer )
                         ++buffer;
                 }
@@ -165,7 +169,7 @@ unsigned char * CONCAT(encode_, NAME)(unsigned char * buffer, SV * sv){
         if( SvOK(sv) ){
             STRLEN len;
             char * str = SvPV(sv, len);
-            return encode_str(buffer, str, len);
+            return encode_str(buffer, (unsigned char*)str, len);
         }
     }
     *buffer++ = 'n';

@@ -214,19 +214,19 @@ static inline unsigned char * decode_str_r(unsigned char * str, unsigned char * 
                         if( d <= 0x7f )
                             *out_cur++ = (unsigned char) d;
                         else if( d <= 0x7ff ){
-                            *out_cur++ = (unsigned char)(d >> 6 | 0xC0);
-                            *out_cur++ = (unsigned char)(d & 0x3F | 0x80);
+                            *out_cur++ = (unsigned char)( d >> 6          | 0xC0);
+                            *out_cur++ = (unsigned char)((d       & 0x3F) | 0x80);
                         }
                         else if( d <= 0xffff ){
-                            *out_cur++ = (unsigned char)(d >> 12 | 0xE0);
-                            *out_cur++ = (unsigned char)(d >> 6 & 0x3F | 0x80);
-                            *out_cur++ = (unsigned char)(d & 0x3F | 0x80);
+                            *out_cur++ = (unsigned char)( d >> 12         | 0xE0);
+                            *out_cur++ = (unsigned char)((d >> 6  & 0x3F) | 0x80);
+                            *out_cur++ = (unsigned char)((d       & 0x3F) | 0x80);
                         }
                         else{
-                            *out_cur++ = (unsigned char)(d >> 18 | 0xF0);
-                            *out_cur++ = (unsigned char)(d >> 12 & 0x3F | 0x80);
-                            *out_cur++ = (unsigned char)(d >> 6 & 0x3F | 0x80);
-                            *out_cur++ = (unsigned char)(d & 0x3F | 0x80);
+                            *out_cur++ = (unsigned char)( d >> 18         | 0xF0);
+                            *out_cur++ = (unsigned char)((d >> 12 & 0x3F) | 0x80);
+                            *out_cur++ = (unsigned char)((d >>  6 & 0x3F) | 0x80);
+                            *out_cur++ = (unsigned char)((d       & 0x3F) | 0x80);
                         }
 
                         break;
@@ -328,7 +328,7 @@ unsigned char * decode(unsigned char * str, unsigned char * str_end, SV**out){
                 }
                 if( elem==NULL )
                     elem = newSV(0);
-                hv_store(hv, key_buffer, key_end-key_buffer, elem, 0);
+                hv_store(hv, (char*)key_buffer, key_end-key_buffer, elem, 0);
 
                 str = skip_space(str, str_end);
                 if( str==str_end ){
@@ -346,13 +346,13 @@ unsigned char * decode(unsigned char * str, unsigned char * str_end, SV**out){
             *out = newSV(0);
             sv_upgrade(*out, SVt_PV);
             SvPOK_on(*out);
-            SvPV_set(*out, value_buffer);
+            SvPV_set(*out, (char*)value_buffer);
             SvCUR_set(*out, value_end - value_buffer);
             SvLEN_set(*out, value_buffer_end - value_buffer);
             return str;
         }
         default: {
-            if( str_end-str==4 || str_end-str>4 && !is_identity(str[4]) ){
+            if( (str_end-str==4 || str_end-str>4) && !is_identity(str[4]) ){
                 if( (str[0]=='T' || str[0]=='t') && (str[1]=='R' || str[1]=='r') && (str[2]=='U' || str[2]=='u') && (str[3]=='E' || str[3]=='e') ){
                     *out = newSViv(1);
                     return str+4;
@@ -362,7 +362,7 @@ unsigned char * decode(unsigned char * str, unsigned char * str_end, SV**out){
                     return str+4;
                 }
             }
-            if( str_end-str==5 || str_end-str>5 && !is_identity(str[5]) ){
+            if( (str_end-str==5 || str_end-str>5) && !is_identity(str[5]) ){
                 if( (str[0]=='F' || str[0]=='f') && (str[1]=='A' || str[1]=='a') && (str[2]=='L' || str[2]=='l') && (str[3]=='S' || str[3]=='s') && (str[3]=='E' || str[3]=='e') ){
                     *out = newSVpvn("", 0);
                     return str+5;
@@ -374,7 +374,7 @@ unsigned char * decode(unsigned char * str, unsigned char * str_end, SV**out){
             *out = newSV(0);
             sv_upgrade(*out, SVt_PV);
             SvPOK_on(*out);
-            SvPV_set(*out, value_buffer);
+            SvPV_set(*out, (char*)value_buffer);
             SvCUR_set(*out, value_end - value_buffer);
             SvLEN_set(*out, value_buffer_end - value_buffer);
             return str;
@@ -390,7 +390,7 @@ encode_json(SV * data)
         STRLEN need_size = estimate_normal(data);
         SV * out_sv = sv_2mortal(newSV(need_size));
         SvPOK_only(out_sv);
-        char * cur = encode_normal(SvPVX(out_sv), data);
+        char * cur = (char*)encode_normal((unsigned char*)SvPVX(out_sv), data);
         SvCUR_set(out_sv, cur - SvPVX(out_sv));
         *SvEND(out_sv) = 0;
         PUSHs(out_sv);
@@ -401,7 +401,7 @@ encode_json_unblessed(SV * data)
         STRLEN need_size = estimate_unblessed(data);
         SV * out_sv = sv_2mortal(newSV(need_size));
         SvPOK_only(out_sv);
-        char * cur = encode_unblessed(SvPVX(out_sv), data);
+        char * cur = (char*)encode_unblessed((unsigned char*)SvPVX(out_sv), data);
         SvCUR_set(out_sv, cur - SvPVX(out_sv));
         *SvEND(out_sv) = 0;
         PUSHs(out_sv);
@@ -416,7 +416,7 @@ decode_json(SV * json)
         str_adv = decode(str, str+len, &out);
         str_adv = skip_space(str_adv, str+len);
         if( str+len != str_adv )
-            warn("decode_json: Unconsumed characters from offset %d", str_adv-str);
+            warn("decode_json: Unconsumed characters from offset %d", (int)(str_adv-str));
         if( out==NULL )
             PUSHs(&PL_sv_undef);
         else
