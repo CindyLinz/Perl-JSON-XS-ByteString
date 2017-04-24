@@ -1,4 +1,7 @@
-Revision history for Perl extension gutil::JSON2::XS.
+Revision history for Perl extension JSON::XS::ByteString.
+
+1.0.0 2017.4.24
+    Reimplement. Remove the dependency to JSON::XS.
 
 0.15.3 2016.4.14
     Fix floating-point values bug on some perl version.
