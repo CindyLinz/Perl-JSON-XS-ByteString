@@ -8,14 +8,14 @@ require Exporter;
 
 our @ISA = qw(Exporter);
 our @EXPORT_OK = qw(encode_json encode_json_unblessed decode_json decode_json_safe);
-our $VERSION = 1.000000;
+our $VERSION = 1.000001;
 
 require XSLoader;
 XSLoader::load('JSON::XS::ByteString', $VERSION);
 
 =head1 NAME
 
-JSON::XS::ByteString - Thin wrapper around fast L<JSON::XS> that makes each JSON fields as string, and Perl fields as bytes (utf8 octet)
+JSON::XS::ByteString - A more predictable and convenient XS implementation for JSON
 
 =head1 SYNOPSIS
 

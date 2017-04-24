@@ -1,5 +1,8 @@
 Revision history for Perl extension JSON::XS::ByteString.
 
+1.0.1 2017.4.24
+    Edit documentation
+
 1.0.0 2017.4.24
     Reimplement. Remove the dependency to JSON::XS.
 
