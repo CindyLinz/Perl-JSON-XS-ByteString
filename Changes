@@ -1,5 +1,11 @@
 Revision history for Perl extension JSON::XS::ByteString.
 
+1.0.3 2017.4.25
+    A missing file.
+
+1.0.2 2017.4.24
+    Avoid warnings on clang
+
 1.0.1 2017.4.24
     Edit documentation
 
