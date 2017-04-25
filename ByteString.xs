@@ -151,7 +151,7 @@ static inline STRLEN estimate_orig_str(unsigned char * str, unsigned char * str_
 
                         break;
                     }
-                    case 'n': case '\\': case '"': case 't': case 'r': case 'b': case 'f':
+                    case 'n': case '\\': case '"': case 't': case 'r': case '/': case 'b': case 'f':
                         ++len;
                         break;
                     default:
@@ -245,6 +245,9 @@ static inline unsigned char * decode_str_r(unsigned char * str, unsigned char * 
                         break;
                     case 'r':
                         *out_cur++ = '\r';
+                        break;
+                    case '/':
+                        *out_cur++ = '/';
                         break;
                     case 'b':
                         *out_cur++ = '\b';
