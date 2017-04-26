@@ -15,6 +15,7 @@
 #define CONCAT(prefix, suffix) CONCAT_PASTE(prefix, suffix)
 
 static inline STRLEN estimate_str(unsigned char * str, STRLEN len){
+    unsigned char * str_begin = str;
     STRLEN out_len = len+2;
     for(unsigned char * str_end=str+len; str!=str_end; ++str){
         if( *str < 0x20 ){
@@ -29,6 +30,12 @@ static inline STRLEN estimate_str(unsigned char * str, STRLEN len){
         else switch( *str ){
             case '\\': case '"':
                 ++out_len;
+                break;
+            case '/':
+                if( str!=str_begin && *(str-1)=='<' )
+                    ++out_len;
+            default:
+                ;
         }
     }
     return out_len;
@@ -49,6 +56,7 @@ static inline unsigned int decode_hex(unsigned char ch){
 }
 
 static inline unsigned char * encode_str(unsigned char * buffer, unsigned char * str, STRLEN len){
+    unsigned char * str_begin = str;
     *buffer++ = '"';
     for(unsigned char * str_end=str+len; str!=str_end; ++str){
         if( *str < 0x20 ){
@@ -77,17 +85,20 @@ static inline unsigned char * encode_str(unsigned char * buffer, unsigned char *
                     *buffer++ = hex(*str & 15);
             }
         }
-        else switch( *str ){
-            case '\\':
-                *buffer++ = '\\';
-                *buffer++ = '\\';
-                break;
-            case '"':
-                *buffer++ = '\\';
-                *buffer++ = '"';
-                break;
-            default:
-                *buffer++ = *str;
+        else{
+            switch( *str ){
+                case '\\': case '"':
+                    *buffer++ = '\\';
+                    break;
+
+                case '/':
+                    if( str!=str_begin && *(str-1)=='<' )
+                        *buffer++ = '\\';
+
+                default:
+                    ;
+            }
+            *buffer++ = *str;
         }
     }
     *buffer++ = '"';

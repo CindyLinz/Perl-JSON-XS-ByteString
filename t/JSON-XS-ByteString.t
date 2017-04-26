@@ -10,7 +10,7 @@ use warnings;
 
 use Data::Dumper;
 
-use Test::More tests => 21;
+use Test::More tests => 23;
 BEGIN { use_ok('JSON::XS::ByteString') };
 
 #########################
@@ -80,4 +80,8 @@ sub f {
 {
     is(f('Cindy 最漂亮了', 3), qq(["Cindy 最漂亮了","3"]));
     is(JSON::XS::ByteString::encode_json('Cindy 最漂亮了'), qq("Cindy 最漂亮了"));
+}
+{
+    is(JSON::XS::ByteString::decode_json('"漂亮的 Cindy \/\/\k\""'), '漂亮的 Cindy //\\k"');
+    is(JSON::XS::ByteString::encode_json('"漂亮的 Cindy //\k</script>'), '"\"漂亮的 Cindy //\\\\k<\\/script>"');
 }
