@@ -21,7 +21,7 @@ And you can force it to produce numbers in JSON by putting references to numbers
 
 All the string data are treated as UTF-8 octets and just copy them in and out directly, except `"`, `\` and characters that `ord($char) < 32`
 
-`decode_json` won't die with invalid json string.
+`decode_json` will return an undef without exceptions with invalid json string.
 
 # DESIGN CONSIDERATION
 
@@ -48,13 +48,11 @@ Get a JSON string from a perl data structure. Treat blessed objects as strings (
 
 Get the perl data structure back from a JSON string.
 
-If the given string is not a valid JSON string, it will return a partial data without exceptions right before it encountered the unrecognized character.
+If the given string is not a valid JSON string, it will return an undef without exceptions but warns an offset where it encountered the unrecognized character.
 
 ## $perl\_data = decode\_json\_safe($json\_string)
 
-The same as `decode_json`
-
-This function is only for compatible with older versions.
+The same as `decode_json` except that `decode_json_safe` will not warn.
 
 # SEE ALSO
 
