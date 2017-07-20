@@ -138,14 +138,96 @@ static inline bool is_identity(unsigned char ch){
     return !isSPACE(ch) && ch!=',' && ch!=':' && ch!=']' && ch!='}';
 }
 
-static inline STRLEN estimate_orig_str(unsigned char * str, unsigned char * str_end){
+static inline bool is_key(unsigned char ch){
+    return !isSPACE(ch) && ch!=':';
+}
+
+static inline STRLEN is_number(unsigned char * str, unsigned char * str_end){
     if( str==str_end )
         return 0;
-    if( *str=='"' ){
+
+    STRLEN len = 0;
+    bool has_digit = FALSE;
+    if( *str=='+' || *str=='-' ){
+        str = skip_space(str+1, str_end);
+        ++len;
+    }
+
+    if( str!=str_end && isDIGIT(*str) )
+        has_digit = TRUE;
+    while( str!=str_end && isDIGIT(*str) ){
+        ++len;
+        ++str;
+    }
+    if( str!=str_end && *str=='.' ){
+        ++len;
+        ++str;
+    }
+    if( str!=str_end && isDIGIT(*str) )
+        has_digit = TRUE;
+    while( str!=str_end && isDIGIT(*str) ){
+        ++len;
+        ++str;
+    }
+    if( !has_digit )
+        return 0;
+
+    if( str!=str_end && (*str=='e' || *str=='E') ){
+        ++len;
+        ++str;
+        if( str!=str_end && (*str=='+' || *str=='-') ){
+            ++len;
+            ++str;
+        }
+        while( str!=str_end && isDIGIT(*str) ){
+            ++len;
+            ++str;
+        }
+    }
+    return len;
+}
+
+static inline unsigned char * decode_number_r(unsigned char * str, unsigned char * str_end, unsigned char ** out, unsigned char ** out_capacity_end, unsigned char ** out_end){
+    STRLEN len = is_number(str, str_end);
+    if( len<=0 ){
+        *out_end = NULL;
+        return str;
+    }
+
+    if( !*out ){
+        Newx(*out, len+1, unsigned char);
+        *out_capacity_end = *out + len + 1;
+    }
+    else if( *out_capacity_end - *out < len + 1 ){
+        Renew(*out, len+1, unsigned char);
+        *out_capacity_end = *out + len + 1;
+    }
+
+    *out_end = *out + len;
+    **out_end = 0;
+    unsigned char * out_cur = *out;
+
+    if( *str=='+' || *str=='-' ){
+        *out_cur++ = *str;
+        --len;
+        str = skip_space(str+1, str_end);
+    }
+    while( len-- )
+        *out_cur++ = *str++;
+    return str;
+}
+
+static inline STRLEN estimate_orig_key(unsigned char * str, unsigned char * str_end){
+    if( str==str_end )
+        return 0;
+    if( *str=='"' || *str=='\'' ){
+        char delimiter = *str;
         ++str;
         STRLEN len = 0;
         while(TRUE){
-            if( str==str_end || *str=='"' )
+            if( str==str_end )
+                return -1;
+            if( *str==delimiter )
                 return len;
             if( *str=='\\' ){
                 ++str;
@@ -173,11 +255,14 @@ static inline STRLEN estimate_orig_str(unsigned char * str, unsigned char * str_
 
                         break;
                     }
-                    case 'n': case '\\': case '"': case 't': case 'r': case '/': case 'b': case 'f':
+                    case 'n': case '\\': case 't': case 'r': case '/': case 'b': case 'f':
                         ++len;
                         break;
                     default:
-                        len += 2;
+                        if( *(str-1)==delimiter )
+                            ++len;
+                        else
+                            len += 2;
                 }
             }
             else{
@@ -188,7 +273,7 @@ static inline STRLEN estimate_orig_str(unsigned char * str, unsigned char * str_
     }
     else{
         STRLEN len = 0;
-        while( str!=str_end && is_identity(*str) ){
+        while( str!=str_end && is_key(*str) ){
             ++len;
             ++str;
         }
@@ -196,8 +281,71 @@ static inline STRLEN estimate_orig_str(unsigned char * str, unsigned char * str_
     }
 }
 
-static inline unsigned char * decode_str_r(unsigned char * str, unsigned char * str_end, unsigned char ** out, unsigned char ** out_capacity_end, unsigned char ** out_end){
-    STRLEN len = estimate_orig_str(str, str_end);
+static inline STRLEN estimate_orig_str(unsigned char * str, unsigned char * str_end){
+    if( str==str_end )
+        return -1;
+    if( *str=='"' || *str=='\'' ){
+        char delimiter = *str;
+        ++str;
+        STRLEN len = 0;
+        while(TRUE){
+            if( str==str_end )
+                return -1;
+            if( *str==delimiter )
+                return len;
+            if( *str=='\\' ){
+                ++str;
+                switch( *str++ ){
+                    case 'u': {
+                        unsigned int d = 0;
+
+                        if( str!=str_end && isXDIGIT(*str) )
+                            d = (d << 4) + decode_hex(*str++);
+                        if( str!=str_end && isXDIGIT(*str) )
+                            d = (d << 4) + decode_hex(*str++);
+                        if( str!=str_end && isXDIGIT(*str) )
+                            d = (d << 4) + decode_hex(*str++);
+                        if( str!=str_end && isXDIGIT(*str) )
+                            d = (d << 4) + decode_hex(*str++);
+
+                        if( d <= 0x7f )
+                            ++len;
+                        else if( d <= 0x7ff )
+                            len += 2;
+                        else if( d <= 0xffff )
+                            len += 3;
+                        else
+                            len += 4;
+
+                        break;
+                    }
+                    case 'n': case '\\': case 't': case 'r': case '/': case 'b': case 'f':
+                        ++len;
+                        break;
+                    default:
+                        if( *(str-1)==delimiter )
+                            ++len;
+                        else
+                            len += 2;
+                }
+            }
+            else{
+                ++len;
+                ++str;
+            }
+        }
+    }
+    else
+        return -1;
+}
+
+static inline unsigned char * decode_key_r(unsigned char * str, unsigned char * str_end, unsigned char ** out, unsigned char ** out_capacity_end, unsigned char ** out_end){
+    STRLEN len = estimate_orig_key(str, str_end);
+    if( len<0 ){
+        *out_end = NULL;
+        return str;
+    }
+
     if( !*out ){
         Newx(*out, len+1, unsigned char);
         *out_capacity_end = *out + len + 1;
@@ -211,12 +359,11 @@ static inline unsigned char * decode_str_r(unsigned char * str, unsigned char * 
     **out_end = 0;
     unsigned char * out_cur = *out;
 
-    if( *str=='"' ){
+    if( *str=='"' || *str=='\'' ){
+        char delimiter = *str;
         ++str;
         while(TRUE){
-            if( str==str_end )
-                return str;
-            if( *str=='"' )
+            if( *str==delimiter )
                 return str+1;
             if( *str=='\\' ){
                 ++str;
@@ -259,9 +406,6 @@ static inline unsigned char * decode_str_r(unsigned char * str, unsigned char * 
                     case '\\':
                         *out_cur++ = '\\';
                         break;
-                    case '"':
-                        *out_cur++ = '"';
-                        break;
                     case 't':
                         *out_cur++ = '\t';
                         break;
@@ -278,7 +422,8 @@ static inline unsigned char * decode_str_r(unsigned char * str, unsigned char * 
                         *out_cur++ = '\f';
                         break;
                     default:
-                        *out_cur++ = '\\';
+                        if( *(str-1)!=delimiter )
+                            *out_cur++ = '\\';
                         *out_cur++ = *(str-1);
                 }
             }
@@ -287,87 +432,195 @@ static inline unsigned char * decode_str_r(unsigned char * str, unsigned char * 
         }
     }
     else{
-        while( str!=str_end && is_identity(*str) )
+        while( str!=str_end && is_key(*str) )
             *out_cur++ = *str++;
         return str;
+    }
+}
+
+static inline unsigned char * decode_str_r(unsigned char * str, unsigned char * str_end, unsigned char ** out, unsigned char ** out_capacity_end, unsigned char ** out_end){
+    STRLEN len = estimate_orig_str(str, str_end);
+    if( len<0 ){
+        *out_end = NULL;
+        return str;
+    }
+
+    if( !*out ){
+        Newx(*out, len+1, unsigned char);
+        *out_capacity_end = *out + len + 1;
+    }
+    else if( *out_capacity_end - *out < len + 1 ){
+        Renew(*out, len+1, unsigned char);
+        *out_capacity_end = *out + len + 1;
+    }
+
+    *out_end = *out + len;
+    **out_end = 0;
+    unsigned char * out_cur = *out;
+
+    char delimiter = *str;
+    ++str;
+    while(TRUE){
+        if( *str==delimiter )
+            return str+1;
+        if( *str=='\\' ){
+            ++str;
+            switch( *str++ ){
+                case 'u': {
+                    unsigned int d = 0;
+
+                    if( str!=str_end && isXDIGIT(*str) )
+                        d = (d << 4) + decode_hex(*str++);
+                    if( str!=str_end && isXDIGIT(*str) )
+                        d = (d << 4) + decode_hex(*str++);
+                    if( str!=str_end && isXDIGIT(*str) )
+                        d = (d << 4) + decode_hex(*str++);
+                    if( str!=str_end && isXDIGIT(*str) )
+                        d = (d << 4) + decode_hex(*str++);
+
+                    if( d <= 0x7f )
+                        *out_cur++ = (unsigned char) d;
+                    else if( d <= 0x7ff ){
+                        *out_cur++ = (unsigned char)( d >> 6          | 0xC0);
+                        *out_cur++ = (unsigned char)((d       & 0x3F) | 0x80);
+                    }
+                    else if( d <= 0xffff ){
+                        *out_cur++ = (unsigned char)( d >> 12         | 0xE0);
+                        *out_cur++ = (unsigned char)((d >> 6  & 0x3F) | 0x80);
+                        *out_cur++ = (unsigned char)((d       & 0x3F) | 0x80);
+                    }
+                    else{
+                        *out_cur++ = (unsigned char)( d >> 18         | 0xF0);
+                        *out_cur++ = (unsigned char)((d >> 12 & 0x3F) | 0x80);
+                        *out_cur++ = (unsigned char)((d >>  6 & 0x3F) | 0x80);
+                        *out_cur++ = (unsigned char)((d       & 0x3F) | 0x80);
+                    }
+
+                    break;
+                }
+                case 'n':
+                    *out_cur++ = '\n';
+                    break;
+                case '\\':
+                    *out_cur++ = '\\';
+                    break;
+                case 't':
+                    *out_cur++ = '\t';
+                    break;
+                case 'r':
+                    *out_cur++ = '\r';
+                    break;
+                case '/':
+                    *out_cur++ = '/';
+                    break;
+                case 'b':
+                    *out_cur++ = '\b';
+                    break;
+                case 'f':
+                    *out_cur++ = '\f';
+                    break;
+                default:
+                    if( *(str-1)!=delimiter )
+                        *out_cur++ = '\\';
+                    *out_cur++ = *(str-1);
+            }
+        }
+        else
+            *out_cur++ = *str++;
     }
 }
 
 // the created SV has refcnt=1
 unsigned char * decode(unsigned char * str, unsigned char * str_end, SV**out){
     str = skip_space(str, str_end);
-    if( str==str_end ){
-        *out = NULL;
-        return str;
-    }
+    if( str==str_end )
+        goto GIVEUP;
 
     switch( *str ){
         case '[': {
             AV * av = newAV();
             *out = newRV_noinc((SV*) av);
-            ++str;
+            str = skip_space(str+1, str_end);
+
             while(TRUE){
-                str = skip_space(str, str_end);
                 if( str==str_end )
-                    return str;
+                    goto ROLLBACK;
                 if( *str == ']' )
                     return str+1;
 
                 SV * elem;
                 str = decode(str, str_end, &elem);
                 if( elem==NULL )
-                    return str;
+                    goto ROLLBACK;
                 av_push(av, elem);
 
                 str = skip_space(str, str_end);
                 if( str==str_end )
-                    return str;
+                    goto ROLLBACK;
+                if( *str == ']' )
+                    return str+1;
                 if( *str==',' )
-                    ++str;
+                    str = skip_space(str+1, str_end);
+                else
+                    goto ROLLBACK;
             }
         }
         case '{': {
             HV * hv = newHV();
             *out = newRV_noinc((SV*) hv);
-            ++str;
+            str = skip_space(str+1, str_end);
             unsigned char *key_buffer=0, *key_buffer_end, *key_end;
             while(TRUE){
-                str = skip_space(str, str_end);
                 if( str==str_end ){
                     if( key_buffer )
                         Safefree(key_buffer);
-                    return str;
+                    goto ROLLBACK;
                 }
                 if( *str=='}' ){
                     if( key_buffer )
                         Safefree(key_buffer);
                     return str+1;
                 }
-                str = decode_str_r(str, str_end, &key_buffer, &key_buffer_end, &key_end);
+                str = decode_key_r(str, str_end, &key_buffer, &key_buffer_end, &key_end);
+                if( !key_end ){
+                    if( key_buffer )
+                        Safefree(key_buffer);
+                    goto ROLLBACK;
+                }
                 str = skip_space(str, str_end);
 
                 SV * elem = NULL;
-                if( *str==':' ){
-                    ++str;
-                    str = decode(str, str_end, &elem);
+                if( *str==':' )
+                    str = decode(str+1, str_end, &elem);
+                if( elem==NULL ){
+                    Safefree(key_buffer);
+                    goto ROLLBACK;
                 }
-                if( elem==NULL )
-                    elem = newSV(0);
                 hv_store(hv, (char*)key_buffer, key_end-key_buffer, elem, 0);
 
                 str = skip_space(str, str_end);
                 if( str==str_end ){
                     Safefree(key_buffer);
-                    return str;
+                    goto ROLLBACK;
+                }
+                if( *str=='}' ){
+                    Safefree(key_buffer);
+                    return str+1;
                 }
                 if( *str==',' )
-                    ++str;
+                    str = skip_space(str+1, str_end);
+                else{
+                    Safefree(key_buffer);
+                    goto ROLLBACK;
+                }
             }
             break;
         }
-        case '"': {
+        case '"': case '\'': {
             unsigned char *value_buffer=0, *value_buffer_end, *value_end;
             str = decode_str_r(str, str_end, &value_buffer, &value_buffer_end, &value_end);
+            if( !value_end )
+                goto GIVEUP;
             *out = newSV(0);
             sv_upgrade(*out, SVt_PV);
             SvPOK_on(*out);
@@ -395,16 +648,26 @@ unsigned char * decode(unsigned char * str, unsigned char * str_end, SV**out){
             }
 
             unsigned char *value_buffer=0, *value_buffer_end, *value_end;
-            str = decode_str_r(str, str_end, &value_buffer, &value_buffer_end, &value_end);
-            *out = newSV(0);
-            sv_upgrade(*out, SVt_PV);
-            SvPOK_on(*out);
-            SvPV_set(*out, (char*)value_buffer);
-            SvCUR_set(*out, value_end - value_buffer);
-            SvLEN_set(*out, value_buffer_end - value_buffer);
-            return str;
+            str = decode_number_r(str, str_end, &value_buffer, &value_buffer_end, &value_end);
+            if( value_end ){
+                *out = newSV(0);
+                sv_upgrade(*out, SVt_PV);
+                SvPOK_on(*out);
+                SvPV_set(*out, (char*)value_buffer);
+                SvCUR_set(*out, value_end - value_buffer);
+                SvLEN_set(*out, value_buffer_end - value_buffer);
+                return str;
+            }
+
+            goto GIVEUP;
         }
     }
+
+ROLLBACK:
+    SvREFCNT_dec_NN(*out);
+GIVEUP:
+    *out = NULL;
+    return str;
 }
 
 MODULE = JSON::XS::ByteString		PACKAGE = JSON::XS::ByteString		
@@ -444,9 +707,30 @@ decode_json(SV * json)
         SV * out = NULL;
         str_adv = decode(str, str+len, &out);
         str_adv = skip_space(str_adv, str+len);
-        if( str+len != str_adv )
+        if( str+len != str_adv ){
             warn("decode_json: Unconsumed characters from offset %d", (int)(str_adv-str));
-        if( out==NULL )
+            SvREFCNT_dec(out);
+            PUSHs(&PL_sv_undef);
+        }
+        else if( out==NULL )
+            PUSHs(&PL_sv_undef);
+        else
+            PUSHs(sv_2mortal(out));
+
+void
+decode_json_safe(SV * json)
+    PPCODE:
+        unsigned char *str, *str_adv;
+        STRLEN len;
+        str = (unsigned char*) SvPV(json, len);
+        SV * out = NULL;
+        str_adv = decode(str, str+len, &out);
+        str_adv = skip_space(str_adv, str+len);
+        if( str+len != str_adv ){
+            SvREFCNT_dec(out);
+            PUSHs(&PL_sv_undef);
+        }
+        else if( out==NULL )
             PUSHs(&PL_sv_undef);
         else
             PUSHs(sv_2mortal(out));

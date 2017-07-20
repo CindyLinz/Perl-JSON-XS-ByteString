@@ -1,5 +1,9 @@
 Revision history for Perl extension JSON::XS::ByteString.
 
+1.1.0 2017.7.21
+    Parse hash keys and value strings with different parser.
+    Return undef when encountering unrecgonized character series.
+
 1.0.6 2017.5.12
     Degenerate looped data point to NULL when generating JSON strings.
 
