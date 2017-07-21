@@ -1,5 +1,8 @@
 Revision history for Perl extension JSON::XS::ByteString.
 
+1.2.0 2017.7.21
+    Bug fix for unsigned STRLEN
+
 1.1.0 2017.7.21
     Parse hash keys and value strings with different parser.
     Return undef when encountering unrecgonized character series.

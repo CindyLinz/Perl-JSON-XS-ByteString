@@ -341,7 +341,7 @@ static inline STRLEN estimate_orig_str(unsigned char * str, unsigned char * str_
 
 static inline unsigned char * decode_key_r(unsigned char * str, unsigned char * str_end, unsigned char ** out, unsigned char ** out_capacity_end, unsigned char ** out_end){
     STRLEN len = estimate_orig_key(str, str_end);
-    if( len<0 ){
+    if( len==-1 ){
         *out_end = NULL;
         return str;
     }
@@ -440,7 +440,7 @@ static inline unsigned char * decode_key_r(unsigned char * str, unsigned char * 
 
 static inline unsigned char * decode_str_r(unsigned char * str, unsigned char * str_end, unsigned char ** out, unsigned char ** out_capacity_end, unsigned char ** out_end){
     STRLEN len = estimate_orig_str(str, str_end);
-    if( len<0 ){
+    if( len==-1 ){
         *out_end = NULL;
         return str;
     }
