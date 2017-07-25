@@ -11,6 +11,10 @@
 #  define LIKELY(x) (x)
 #endif
 
+#ifndef SvREFCNT_dec_NN
+#  define SvREFCNT_dec_NN SvREFCNT_dec
+#endif
+
 #define CONCAT_PASTE(prefix, suffix) prefix ## suffix
 #define CONCAT(prefix, suffix) CONCAT_PASTE(prefix, suffix)
 
