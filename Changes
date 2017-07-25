@@ -1,5 +1,9 @@
 Revision history for Perl extension JSON::XS::ByteString.
 
+1.3.0 2017.7.25
+    Buf fix for decoding identity (true, false, null).
+    Skip UTF-8 BOM automatically
+
 1.2.0 2017.7.21
     Bug fix for unsigned STRLEN
 

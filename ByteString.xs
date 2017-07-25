@@ -128,6 +128,12 @@ static inline unsigned char * encode_str(unsigned char * buffer, unsigned char *
 #undef UNBLESSED
 #undef NAME
 
+static inline unsigned char * skip_bom(unsigned char * str, unsigned char * str_end){
+    if( str_end - str >= 3 && str[0]==(unsigned char)'\xEF' && str[1]==(unsigned char)'\xBB' && str[2]==(unsigned char)'\xBF' )
+        return str+3;
+    return str;
+}
+
 static inline unsigned char * skip_space(unsigned char * str, unsigned char * str_end){
     while( str!=str_end && isSPACE(*str) )
         ++str;
@@ -630,7 +636,7 @@ unsigned char * decode(unsigned char * str, unsigned char * str_end, SV**out){
             return str;
         }
         default: {
-            if( (str_end-str==4 || str_end-str>4) && !is_identity(str[4]) ){
+            if( str_end-str==4 || (str_end-str>4 && !is_identity(str[4])) ){
                 if( (str[0]=='T' || str[0]=='t') && (str[1]=='R' || str[1]=='r') && (str[2]=='U' || str[2]=='u') && (str[3]=='E' || str[3]=='e') ){
                     *out = newSViv(1);
                     return str+4;
@@ -640,8 +646,8 @@ unsigned char * decode(unsigned char * str, unsigned char * str_end, SV**out){
                     return str+4;
                 }
             }
-            if( (str_end-str==5 || str_end-str>5) && !is_identity(str[5]) ){
-                if( (str[0]=='F' || str[0]=='f') && (str[1]=='A' || str[1]=='a') && (str[2]=='L' || str[2]=='l') && (str[3]=='S' || str[3]=='s') && (str[3]=='E' || str[3]=='e') ){
+            if( str_end-str==5 || (str_end-str>5 && !is_identity(str[5])) ){
+                if( (str[0]=='F' || str[0]=='f') && (str[1]=='A' || str[1]=='a') && (str[2]=='L' || str[2]=='l') && (str[3]=='S' || str[3]=='s') && (str[4]=='E' || str[4]=='e') ){
                     *out = newSVpvn("", 0);
                     return str+5;
                 }
@@ -701,13 +707,13 @@ encode_json_unblessed(SV * data)
 void
 decode_json(SV * json)
     PPCODE:
-        unsigned char *str, *str_adv;
+        unsigned char *str, *str_end, *str_adv;
         STRLEN len;
-        str = (unsigned char*) SvPV(json, len);
         SV * out = NULL;
-        str_adv = decode(str, str+len, &out);
-        str_adv = skip_space(str_adv, str+len);
-        if( str+len != str_adv ){
+        str = (unsigned char*) SvPV(json, len);
+        str_end = str + len;
+        str_adv = skip_space(decode(skip_bom(str, str_end), str_end, &out), str_end);
+        if( str_end != str_adv ){
             warn("decode_json: Unconsumed characters from offset %d", (int)(str_adv-str));
             SvREFCNT_dec(out);
             PUSHs(&PL_sv_undef);
@@ -720,13 +726,13 @@ decode_json(SV * json)
 void
 decode_json_safe(SV * json)
     PPCODE:
-        unsigned char *str, *str_adv;
+        unsigned char *str, *str_end, *str_adv;
         STRLEN len;
-        str = (unsigned char*) SvPV(json, len);
         SV * out = NULL;
-        str_adv = decode(str, str+len, &out);
-        str_adv = skip_space(str_adv, str+len);
-        if( str+len != str_adv ){
+        str = (unsigned char*) SvPV(json, len);
+        str_end = str + len;
+        str_adv = skip_space(decode(skip_bom(str, str_end), str_end, &out), str_end);
+        if( str_end != str_adv ){
             SvREFCNT_dec(out);
             PUSHs(&PL_sv_undef);
         }
