@@ -709,8 +709,9 @@ encode_json_unblessed(SV * data)
         PUSHs(out_sv);
 
 void
-decode_json(SV * json)
+decode_json(SV * json, bool warn2die=FALSE)
     PPCODE:
+        PerlIO_printf(PerlIO_stderr(), "warn2die=%d\n", warn2die);
         unsigned char *str, *str_end, *str_adv;
         STRLEN len;
         SV * out = NULL;
@@ -718,12 +719,22 @@ decode_json(SV * json)
         str_end = str + len;
         str_adv = skip_space(decode(skip_bom(str, str_end), str_end, &out), str_end);
         if( str_end != str_adv ){
-            warn("decode_json: Unconsumed characters from offset %d", (int)(str_adv-str));
-            SvREFCNT_dec(out);
-            PUSHs(&PL_sv_undef);
+            if( warn2die )
+                croak("decode_json: Unconsumed characters from offset %d", (int)(str_adv-str));
+            else{
+                warn("decode_json: Unconsumed characters from offset %d", (int)(str_adv-str));
+                SvREFCNT_dec(out);
+                PUSHs(&PL_sv_undef);
+            }
         }
-        else if( out==NULL )
-            PUSHs(&PL_sv_undef);
+        else if( out==NULL ){
+            if( warn2die )
+                croak("decode_json: Unconsumed characters from offset %d", (int)(str_adv-str));
+            else{
+                warn("decode_json: Unconsumed characters from offset %d", (int)(str_adv-str));
+                PUSHs(&PL_sv_undef);
+            }
+        }
         else
             PUSHs(sv_2mortal(out));
 

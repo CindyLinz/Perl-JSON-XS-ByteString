@@ -8,6 +8,7 @@ JSON::XS::ByteString - A more predictable and convenient XS implementation for J
 
     $json_string = encode_json($perl_data);
     $perl_data = decode_json($json_string);
+    $perl_data = decode_json($json_string, 1); # die if $json_string is not valid JSON string
 
     $json_string = encode_json_unblessed($perl_data);
         # the same behavior as encode_json
@@ -16,7 +17,7 @@ JSON::XS::ByteString - A more predictable and convenient XS implementation for J
 
 # DESCRIPTION
 
-This module is a XS implementation for JSON. It provide a more predictable behavior than [JSON::XS](https://metacpan.org/pod/JSON::XS) by always producing strings in JSON for normal scalars.
+This module is a XS implementation for JSON. It provide a more predictable behavior than [JSON::XS](https://metacpan.org/pod/JSON%3A%3AXS) by always producing strings in JSON for normal scalars.
 And you can force it to produce numbers in JSON by putting references to numbers.
 
 All the string data are treated as UTF-8 octets and just copy them in and out directly, except `"`, `\` and characters that `ord($char) < 32`
@@ -42,21 +43,23 @@ Get a JSON string from a perl data structure. Treat blessed objects as normal re
 
 ## $json\_string = encode\_json\_unblessed($perl\_data)
 
-Get a JSON string from a perl data structure. Treat blessed objects as strings (such as 'Object=HASH(0xffffffff)')
+Get a JSON string from a perl data structure. Treat blessed objects as strings (such as `'Object=HASH(0xffffffff)'`)
 
-## $perl\_data = decode\_json($json\_string)
+## $perl\_data = decode\_json($json\_string, $warn2die=0)
 
 Get the perl data structure back from a JSON string.
 
-If the given string is not a valid JSON string, it will return an undef without exceptions but warns an offset where it encountered the unrecognized character.
+If the given string is not a valid JSON string, it will return an `undef`.
+If the `$warn2die` is false or not specified, this function will not die but warns an offset where it encountered the unrecognized character.
+If the `$warn2die` is true, this function will die with the error message which is identical to the warning one.
 
 ## $perl\_data = decode\_json\_safe($json\_string)
 
-The same as `decode_json` except that `decode_json_safe` will not warn.
+The same as `decode_json` except that `decode_json_safe` will not warn at all.
 
 # SEE ALSO
 
-[JSON::XS](https://metacpan.org/pod/JSON::XS)
+[JSON::XS](https://metacpan.org/pod/JSON%3A%3AXS)
 
 This mod's github repository [https://github.com/CindyLinz/Perl-JSON-XS-ByteString](https://github.com/CindyLinz/Perl-JSON-XS-ByteString)
 
@@ -66,7 +69,7 @@ Cindy Wang (CindyLinz)
 
 # COPYRIGHT AND LICENSE
 
-Copyright (C) 2014-2017 by Cindy Wang (CindyLinz)
+Copyright (C) 2014-2020 by Cindy Wang (CindyLinz)
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself, either Perl version 5.8 or,

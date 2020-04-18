@@ -10,7 +10,7 @@ use warnings;
 
 use Data::Dumper;
 
-use Test::More tests => 27;
+use Test::More tests => 28;
 BEGIN { use_ok('JSON::XS::ByteString') };
 
 #########################
@@ -94,3 +94,8 @@ sub f {
 is(JSON::XS::ByteString::decode_json('xx'), undef);
 is(JSON::XS::ByteString::decode_json('[xx]'), undef);
 is(JSON::XS::ByteString::decode_json('["a",{]'), undef);
+
+eval {
+    my $res = JSON::XS::ByteString::decode_json('["invalid', 1);
+};
+is(substr($@, 0, 12, $@), 'decode_json:', 'warn to die');

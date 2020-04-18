@@ -8,7 +8,7 @@ require Exporter;
 
 our @ISA = qw(Exporter);
 our @EXPORT_OK = qw(encode_json encode_json_unblessed decode_json decode_json_safe);
-our $VERSION = 1.003001;
+our $VERSION = 1.004000;
 
 require XSLoader;
 XSLoader::load('JSON::XS::ByteString', $VERSION);
@@ -23,6 +23,7 @@ JSON::XS::ByteString - A more predictable and convenient XS implementation for J
 
     $json_string = encode_json($perl_data);
     $perl_data = decode_json($json_string);
+    $perl_data = decode_json($json_string, 1); # die if $json_string is not valid JSON string
 
     $json_string = encode_json_unblessed($perl_data);
         # the same behavior as encode_json
@@ -57,17 +58,19 @@ Get a JSON string from a perl data structure. Treat blessed objects as normal re
 
 =head2 $json_string = encode_json_unblessed($perl_data)
 
-Get a JSON string from a perl data structure. Treat blessed objects as strings (such as 'Object=HASH(0xffffffff)')
+Get a JSON string from a perl data structure. Treat blessed objects as strings (such as C<'Object=HASH(0xffffffff)'>)
 
-=head2 $perl_data = decode_json($json_string)
+=head2 $perl_data = decode_json($json_string, $warn2die=0)
 
 Get the perl data structure back from a JSON string.
 
-If the given string is not a valid JSON string, it will return an undef without exceptions but warns an offset where it encountered the unrecognized character.
+If the given string is not a valid JSON string, it will return an C<undef>.
+If the C<$warn2die> is false or not specified, this function will not die but warns an offset where it encountered the unrecognized character.
+If the C<$warn2die> is true, this function will die with the error message which is identical to the warning one.
 
 =head2 $perl_data = decode_json_safe($json_string)
 
-The same as C<decode_json> except that C<decode_json_safe> will not warn.
+The same as C<decode_json> except that C<decode_json_safe> will not warn at all.
 
 =head1 SEE ALSO
 
@@ -81,7 +84,7 @@ Cindy Wang (CindyLinz)
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2014-2017 by Cindy Wang (CindyLinz)
+Copyright (C) 2014-2020 by Cindy Wang (CindyLinz)
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself, either Perl version 5.8 or,
