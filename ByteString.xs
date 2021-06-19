@@ -711,7 +711,6 @@ encode_json_unblessed(SV * data)
 void
 decode_json(SV * json, bool warn2die=FALSE)
     PPCODE:
-        PerlIO_printf(PerlIO_stderr(), "warn2die=%d\n", warn2die);
         unsigned char *str, *str_end, *str_adv;
         STRLEN len;
         SV * out = NULL;

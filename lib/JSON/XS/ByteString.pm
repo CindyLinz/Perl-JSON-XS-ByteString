@@ -8,7 +8,7 @@ require Exporter;
 
 our @ISA = qw(Exporter);
 our @EXPORT_OK = qw(encode_json encode_json_unblessed decode_json decode_json_safe);
-our $VERSION = 1.004000;
+our $VERSION = 1.005000;
 
 require XSLoader;
 XSLoader::load('JSON::XS::ByteString', $VERSION);
@@ -84,7 +84,7 @@ Cindy Wang (CindyLinz)
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2014-2020 by Cindy Wang (CindyLinz)
+Copyright (C) 2014-2021 by Cindy Wang (CindyLinz)
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself, either Perl version 5.8 or,
