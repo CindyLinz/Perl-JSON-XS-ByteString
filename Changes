@@ -1,5 +1,8 @@
 Revision history for Perl extension JSON::XS::ByteString.
 
+1.6.0 2022.11.3
+    Add encode_json_pretty and encode_json_unblessed_pretty
+
 1.5.0 2021.6.19
     Remove a debug message in `decode_json`
 

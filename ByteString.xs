@@ -122,13 +122,33 @@ static inline unsigned char * encode_str(unsigned char * buffer, unsigned char *
 
 #define NAME normal
 #define UNBLESSED FALSE
+#define PRETTY FALSE
 #include "encode_gen.h"
+#undef PRETTY
+#undef UNBLESSED
+#undef NAME
+
+#define NAME normal_pretty
+#define UNBLESSED FALSE
+#define PRETTY TRUE
+#include "encode_gen.h"
+#undef PRETTY
 #undef UNBLESSED
 #undef NAME
 
 #define NAME unblessed
 #define UNBLESSED TRUE
+#define PRETTY FALSE
 #include "encode_gen.h"
+#undef PRETTY
+#undef UNBLESSED
+#undef NAME
+
+#define NAME unblessed_pretty
+#define UNBLESSED TRUE
+#define PRETTY TRUE
+#include "encode_gen.h"
+#undef PRETTY
 #undef UNBLESSED
 #undef NAME
 
@@ -686,11 +706,24 @@ void
 encode_json(SV * data)
     PPCODE:
         visited_p = 0;
-        STRLEN need_size = estimate_normal(data);
+        STRLEN need_size = estimate_normal(data, 0);
         SV * out_sv = sv_2mortal(newSV(need_size));
         SvPOK_only(out_sv);
         visited_p = 0;
-        char * cur = (char*)encode_normal((unsigned char*)SvPVX(out_sv), data);
+        char * cur = (char*)encode_normal((unsigned char*)SvPVX(out_sv), data, 0);
+        SvCUR_set(out_sv, cur - SvPVX(out_sv));
+        *SvEND(out_sv) = 0;
+        PUSHs(out_sv);
+
+void
+encode_json_pretty(SV * data)
+    PPCODE:
+        visited_p = 0;
+        STRLEN need_size = estimate_normal(data, 0);
+        SV * out_sv = sv_2mortal(newSV(need_size));
+        SvPOK_only(out_sv);
+        visited_p = 0;
+        char * cur = (char*)encode_normal_pretty((unsigned char*)SvPVX(out_sv), data, 0);
         SvCUR_set(out_sv, cur - SvPVX(out_sv));
         *SvEND(out_sv) = 0;
         PUSHs(out_sv);
@@ -699,11 +732,24 @@ void
 encode_json_unblessed(SV * data)
     PPCODE:
         visited_p = 0;
-        STRLEN need_size = estimate_unblessed(data);
+        STRLEN need_size = estimate_unblessed(data, 0);
         SV * out_sv = sv_2mortal(newSV(need_size));
         SvPOK_only(out_sv);
         visited_p = 0;
-        char * cur = (char*)encode_unblessed((unsigned char*)SvPVX(out_sv), data);
+        char * cur = (char*)encode_unblessed((unsigned char*)SvPVX(out_sv), data, 0);
+        SvCUR_set(out_sv, cur - SvPVX(out_sv));
+        *SvEND(out_sv) = 0;
+        PUSHs(out_sv);
+
+void
+encode_json_unblessed_pretty(SV * data)
+    PPCODE:
+        visited_p = 0;
+        STRLEN need_size = estimate_unblessed(data, 0);
+        SV * out_sv = sv_2mortal(newSV(need_size));
+        SvPOK_only(out_sv);
+        visited_p = 0;
+        char * cur = (char*)encode_unblessed_pretty((unsigned char*)SvPVX(out_sv), data, 0);
         SvCUR_set(out_sv, cur - SvPVX(out_sv));
         *SvEND(out_sv) = 0;
         PUSHs(out_sv);

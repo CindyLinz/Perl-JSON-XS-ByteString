@@ -8,7 +8,7 @@ require Exporter;
 
 our @ISA = qw(Exporter);
 our @EXPORT_OK = qw(encode_json encode_json_unblessed decode_json decode_json_safe);
-our $VERSION = 1.005000;
+our $VERSION = 1.006000;
 
 require XSLoader;
 XSLoader::load('JSON::XS::ByteString', $VERSION);
@@ -22,10 +22,12 @@ JSON::XS::ByteString - A more predictable and convenient XS implementation for J
     use JSON::XS::ByteString qw(encode_json encode_json_unblessed decode_json decode_json_safe);
 
     $json_string = encode_json($perl_data);
+    $json_string_pretty = encode_json_pretty($perl_data);
     $perl_data = decode_json($json_string);
     $perl_data = decode_json($json_string, 1); # die if $json_string is not valid JSON string
 
     $json_string = encode_json_unblessed($perl_data);
+    $json_string_pretty = encode_json_unblessed_pretty($perl_data);
         # the same behavior as encode_json
         #  but encode blessed references as reference strings,
         #  like 'Object=HASH(0xffffffff)'

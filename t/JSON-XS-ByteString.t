@@ -10,7 +10,7 @@ use warnings;
 
 use Data::Dumper;
 
-use Test::More tests => 28;
+use Test::More tests => 32;
 BEGIN { use_ok('JSON::XS::ByteString') };
 
 #########################
@@ -34,6 +34,7 @@ is_deeply(JSON::XS::ByteString::decode_json(JSON::XS::ByteString::encode_json([u
 }
 
 is(JSON::XS::ByteString::encode_json({"Cindy 好漂亮"=>1}), '{"Cindy 好漂亮":"1"}', 'encode utf8 hash key');
+is(JSON::XS::ByteString::encode_json_pretty({"Cindy 好漂亮"=>1}), qq({ "Cindy 好漂亮": "1"\n}), 'encode utf8 hash key');
 is_deeply(JSON::XS::ByteString::decode_json('{"Cindy 好漂亮":1}'), {"Cindy 好漂亮"=>1}, 'decode utf8 hash key');
 
 {
@@ -46,6 +47,7 @@ is(JSON::XS::ByteString::encode_json([join '', map { chr hex $_ } qw(C0 A2)]), q
 is(JSON::XS::ByteString::encode_json([join '', map { chr hex $_ } qw(F5 84 81 B9)]), qq(["\xF5\x84\x81\xB9"]), "codepoint after U+10FFFF");
 
 {
+    local $SIG{__WARN__} = sub{};
     my $data = ['a',\2,3,\'12a'];
     is(JSON::XS::ByteString::encode_json($data), '["a",2,"3",12]', "scalar ref as number hint");
     is(JSON::XS::ByteString::encode_json($data), '["a",2,"3",12]', "scalar ref as number hint twice");
@@ -77,9 +79,15 @@ is(JSON::XS::ByteString::encode_json([join '', map { chr hex $_ } qw(F5 84 81 B9
 sub f {
     JSON::XS::ByteString::encode_json(\@_);
 }
+sub fp {
+    JSON::XS::ByteString::encode_json_pretty(\@_);
+}
 {
     is(f('Cindy 最漂亮了', 3), qq(["Cindy 最漂亮了","3"]));
+    is(fp('Cindy 最漂亮了', 3), qq([ "Cindy 最漂亮了"\n, "3"\n]));
+    is(fp('Cindy 最漂亮了'), qq(["Cindy 最漂亮了"]));
     is(JSON::XS::ByteString::encode_json('Cindy 最漂亮了'), qq("Cindy 最漂亮了"));
+    is(fp('Cindy 好漂亮', { Cindy => '最漂亮了' }), qq([ "Cindy 好漂亮"\n, { "Cindy": "最漂亮了"\n  }\n]));
 }
 {
     is(JSON::XS::ByteString::decode_json('"漂亮的 Cindy \/\/\k\""'), '漂亮的 Cindy //\\k"');
@@ -91,9 +99,12 @@ sub f {
     is(JSON::XS::ByteString::encode_json($data), '["1","2","3",null]');
 }
 
-is(JSON::XS::ByteString::decode_json('xx'), undef);
-is(JSON::XS::ByteString::decode_json('[xx]'), undef);
-is(JSON::XS::ByteString::decode_json('["a",{]'), undef);
+{
+    local $SIG{__WARN__} = sub{};
+    is(JSON::XS::ByteString::decode_json('xx'), undef);
+    is(JSON::XS::ByteString::decode_json('[xx]'), undef);
+    is(JSON::XS::ByteString::decode_json('["a",{]'), undef);
+}
 
 eval {
     my $res = JSON::XS::ByteString::decode_json('["invalid', 1);

@@ -1,6 +1,6 @@
 // vim: filetype=xs
 
-STRLEN CONCAT(estimate_, NAME)(SV * sv){
+STRLEN CONCAT(estimate_, NAME)(SV * sv, int depth){
     if( sv!=NULL ){
         if( SvROK(sv) && (!UNBLESSED || !sv_isobject(sv)) ){
             SV * rvs = SvRV(sv);
@@ -21,7 +21,9 @@ STRLEN CONCAT(estimate_, NAME)(SV * sv){
                     STRLEN len = 2 + n;
                     SV ** elems = AvARRAY(av);
                     for(int i=0; i<=n; ++i)
-                        len += CONCAT(estimate_, NAME)(elems[i]);
+                        len += CONCAT(estimate_, NAME)(elems[i], depth+1);
+                    if( PRETTY && n>0 )
+                        len += (n+1) * (depth*2+2);
                     --visited_p;
                     return len;
                 }
@@ -38,10 +40,13 @@ STRLEN CONCAT(estimate_, NAME)(SV * sv){
                         len += estimate_str((unsigned char*)key, (STRLEN) keylen);
 
                         SV * val = hv_iterval(hv, entry);
-                        len += CONCAT(estimate_, NAME)(val);
+                        len += CONCAT(estimate_, NAME)(val, depth+1);
+                        if( PRETTY )
+                            len += depth*2 + 3;
                     }
                     if( len==1 )
                         ++len;
+
                     --visited_p;
                     return len;
                 }
@@ -81,7 +86,7 @@ STRLEN CONCAT(estimate_, NAME)(SV * sv){
     return 4;
 }
 
-unsigned char * CONCAT(encode_, NAME)(unsigned char * buffer, SV * sv){
+unsigned char * CONCAT(encode_, NAME)(unsigned char * buffer, SV * sv, int depth){
     if( sv!=NULL ){
         if( SvROK(sv) && (!UNBLESSED || !sv_isobject(sv)) ){
             SV * rvs = SvRV(sv);
@@ -99,10 +104,28 @@ unsigned char * CONCAT(encode_, NAME)(unsigned char * buffer, SV * sv){
                     if( n>=0 ){
                         SV ** elems = AvARRAY(av);
                         for(int i=0; i<n; ++i){
-                            buffer = CONCAT(encode_, NAME)(buffer, elems[i]);
+                            if( PRETTY )
+                                *buffer++ = ' ';
+                            buffer = CONCAT(encode_, NAME)(buffer, elems[i], depth+1);
+                            if( PRETTY ){
+                                *buffer++ = '\n';
+                                for(int i=0; i<depth; ++i){
+                                    *buffer++ = ' ';
+                                    *buffer++ = ' ';
+                                }
+                            }
                             *buffer++ = ',';
                         }
-                        buffer = CONCAT(encode_, NAME)(buffer, elems[n]);
+                        if( PRETTY && n>0 )
+                            *buffer++ = ' ';
+                        buffer = CONCAT(encode_, NAME)(buffer, elems[n], depth+1);
+                        if( PRETTY && n>0 ){
+                            *buffer++ = '\n';
+                            for(int i=0; i<depth; ++i){
+                                *buffer++ = ' ';
+                                *buffer++ = ' ';
+                            }
+                        }
                     }
 
                     *buffer++ = ']';
@@ -115,16 +138,27 @@ unsigned char * CONCAT(encode_, NAME)(unsigned char * buffer, SV * sv){
 
                     hv_iterinit(hv);
                     for(HE * entry = hv_iternext(hv); entry; entry = hv_iternext(hv)){
+                        if( PRETTY )
+                            *buffer++ = ' ';
 
                         I32 keylen;
                         char * key = hv_iterkey(entry, &keylen);
                         buffer = encode_str(buffer, (unsigned char*)key, (STRLEN) keylen);
 
                         *buffer++ = ':';
+                        if( PRETTY )
+                            *buffer++ = ' ';
 
                         SV * val = hv_iterval(hv, entry);
-                        buffer = CONCAT(encode_, NAME)(buffer, val);
+                        buffer = CONCAT(encode_, NAME)(buffer, val, depth+1);
 
+                        if( PRETTY ){
+                            *buffer++ = '\n';
+                            for(int i=0; i<depth; ++i){
+                                *buffer++ = ' ';
+                                *buffer++ = ' ';
+                            }
+                        }
                         *buffer++ = ',';
                     }
 
