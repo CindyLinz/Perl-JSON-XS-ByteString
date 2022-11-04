@@ -711,6 +711,8 @@ encode_json(SV * data)
         SvPOK_only(out_sv);
         visited_p = 0;
         char * cur = (char*)encode_normal((unsigned char*)SvPVX(out_sv), data, 0);
+        if( cur - SvPVX(out_sv) != need_size )
+            croak("need_size(%d) != real_size(%d)", need_size, cur - SvPVX(out_sv));
         SvCUR_set(out_sv, cur - SvPVX(out_sv));
         *SvEND(out_sv) = 0;
         PUSHs(out_sv);
@@ -719,11 +721,13 @@ void
 encode_json_pretty(SV * data)
     PPCODE:
         visited_p = 0;
-        STRLEN need_size = estimate_normal(data, 0);
+        STRLEN need_size = estimate_normal_pretty(data, 0);
         SV * out_sv = sv_2mortal(newSV(need_size));
         SvPOK_only(out_sv);
         visited_p = 0;
         char * cur = (char*)encode_normal_pretty((unsigned char*)SvPVX(out_sv), data, 0);
+        if( cur - SvPVX(out_sv) != need_size )
+            croak("need_size(%d) != real_size(%d)", need_size, cur - SvPVX(out_sv));
         SvCUR_set(out_sv, cur - SvPVX(out_sv));
         *SvEND(out_sv) = 0;
         PUSHs(out_sv);
@@ -737,6 +741,8 @@ encode_json_unblessed(SV * data)
         SvPOK_only(out_sv);
         visited_p = 0;
         char * cur = (char*)encode_unblessed((unsigned char*)SvPVX(out_sv), data, 0);
+        if( cur - SvPVX(out_sv) != need_size )
+            croak("need_size(%d) != real_size(%d)", need_size, cur - SvPVX(out_sv));
         SvCUR_set(out_sv, cur - SvPVX(out_sv));
         *SvEND(out_sv) = 0;
         PUSHs(out_sv);
@@ -745,11 +751,13 @@ void
 encode_json_unblessed_pretty(SV * data)
     PPCODE:
         visited_p = 0;
-        STRLEN need_size = estimate_unblessed(data, 0);
+        STRLEN need_size = estimate_unblessed_pretty(data, 0);
         SV * out_sv = sv_2mortal(newSV(need_size));
         SvPOK_only(out_sv);
         visited_p = 0;
         char * cur = (char*)encode_unblessed_pretty((unsigned char*)SvPVX(out_sv), data, 0);
+        if( cur - SvPVX(out_sv) + 1 != need_size )
+            croak("need_size(%d) != real_size(%d)", need_size, cur - SvPVX(out_sv) + 1);
         SvCUR_set(out_sv, cur - SvPVX(out_sv));
         *SvEND(out_sv) = 0;
         PUSHs(out_sv);

@@ -7,8 +7,8 @@ use warnings;
 require Exporter;
 
 our @ISA = qw(Exporter);
-our @EXPORT_OK = qw(encode_json encode_json_unblessed decode_json decode_json_safe);
-our $VERSION = 1.006000;
+our @EXPORT_OK = qw(encode_json encode_json_pretty encode_json_unblessed encode_json_unblessed_pretty decode_json decode_json_safe);
+our $VERSION = 1.007000;
 
 require XSLoader;
 XSLoader::load('JSON::XS::ByteString', $VERSION);
@@ -54,11 +54,11 @@ Let C<json_decode> preserve the identical structure as it received.
 
 =head1 FUNCTIONS
 
-=head2 $json_string = encode_json($perl_data)
+=head2 $json_string = encode_json($perl_data) / encode_json_pretty($perl_data)
 
 Get a JSON string from a perl data structure. Treat blessed objects as normal references.
 
-=head2 $json_string = encode_json_unblessed($perl_data)
+=head2 $json_string = encode_json_unblessed($perl_data) / encode_json_unblessed_pretty($perl_data)
 
 Get a JSON string from a perl data structure. Treat blessed objects as strings (such as C<'Object=HASH(0xffffffff)'>)
 
