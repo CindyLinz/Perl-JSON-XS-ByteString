@@ -7,10 +7,12 @@ JSON::XS::ByteString - A more predictable and convenient XS implementation for J
     use JSON::XS::ByteString qw(encode_json encode_json_unblessed decode_json decode_json_safe);
 
     $json_string = encode_json($perl_data);
+    $json_string_pretty = encode_json_pretty($perl_data);
     $perl_data = decode_json($json_string);
     $perl_data = decode_json($json_string, 1); # die if $json_string is not valid JSON string
 
     $json_string = encode_json_unblessed($perl_data);
+    $json_string_pretty = encode_json_unblessed_pretty($perl_data);
         # the same behavior as encode_json
         #  but encode blessed references as reference strings,
         #  like 'Object=HASH(0xffffffff)'
@@ -37,11 +39,11 @@ Let `json_decode` preserve the identical structure as it received.
 
 # FUNCTIONS
 
-## $json\_string = encode\_json($perl\_data)
+## $json\_string = encode\_json($perl\_data) / encode\_json\_pretty($perl\_data)
 
 Get a JSON string from a perl data structure. Treat blessed objects as normal references.
 
-## $json\_string = encode\_json\_unblessed($perl\_data)
+## $json\_string = encode\_json\_unblessed($perl\_data) / encode\_json\_unblessed\_pretty($perl\_data)
 
 Get a JSON string from a perl data structure. Treat blessed objects as strings (such as `'Object=HASH(0xffffffff)'`)
 
@@ -69,7 +71,7 @@ Cindy Wang (CindyLinz)
 
 # COPYRIGHT AND LICENSE
 
-Copyright (C) 2014-2020 by Cindy Wang (CindyLinz)
+Copyright (C) 2014-2021 by Cindy Wang (CindyLinz)
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself, either Perl version 5.8 or,
